@@ -1,4 +1,4 @@
-import { KpiEntry as IKpiEntry, User, Sector, KPI } from '../types';
+import { KpiEntry as IKpiEntry, User, Sector, KPI } from '../../types';
 import { api, HttpError } from './api';
 
 /**
@@ -51,10 +51,10 @@ export const dataService = {
       const result = sector.id
         ? await api.sectors.update(sector.id, sector)
         : await api.sectors.create({ name: sector.name });
-      
+
       // Invalidar cache
       cachedSectors = null;
-      
+
       return result;
     } catch (error) {
       console.error('Erro ao salvar setor:', error);
@@ -108,12 +108,12 @@ export const dataService = {
       }
 
       const entries = await api.entries.getAll({ sectorId, month });
-      
+
       if (!sectorId && !month) {
         cachedEntries = entries;
         lastFetchTime.entries = Date.now();
       }
-      
+
       return entries;
     } catch (error) {
       console.error('Erro ao buscar entradas:', error);
@@ -136,10 +136,10 @@ export const dataService = {
       const result = entry.id
         ? await api.entries.update(entry.id, entry)
         : await api.entries.create(entry);
-      
+
       // Invalidar cache
       cachedEntries = null;
-      
+
       return result;
     } catch (error) {
       console.error('Erro ao salvar entrada:', error);
@@ -151,7 +151,7 @@ export const dataService = {
     try {
       const plans = await api.actionPlans.getAll();
       const plan = plans.find(p => p.entryId === entryId);
-      
+
       if (plan) {
         await api.actionPlans.delete(plan.id);
         cachedEntries = null;
@@ -189,10 +189,10 @@ export const dataService = {
         ...user,
         avatarInitials: user.name.substring(0, 2).toUpperCase(),
       });
-      
+
       // Invalidar cache
       cachedUsers = null;
-      
+
       return result;
     } catch (error) {
       console.error('Erro ao adicionar usuário:', error);

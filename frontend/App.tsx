@@ -6,7 +6,7 @@ import { DataEntryPage } from './pages/DataEntry';
 import { ActionPlansPage } from './pages/ActionPlans';
 import { UserManagementPage } from './pages/UserManagement';
 import { StructureManagementPage } from './pages/StructureManagement';
-import { dataService } from './services/dataService';
+import { dataService } from './src/services/dataService';
 import { User } from './types';
 import { TrendingUp, User as UserIcon, Shield, X } from 'lucide-react';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -61,8 +61,8 @@ const AppContent: React.FC = () => {
     <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-         <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-amber-500 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
-         <div className="absolute top-[60%] -left-[10%] w-[40%] h-[40%] bg-zinc-400 dark:bg-zinc-800 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
+        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-amber-500 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
+        <div className="absolute top-[60%] -left-[10%] w-[40%] h-[40%] bg-zinc-400 dark:bg-zinc-800 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
       </div>
 
       <div className="bg-white/80 dark:bg-zinc-900/50 backdrop-blur-lg max-w-sm w-full rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-8 flex flex-col items-center transition-colors duration-300">
@@ -83,51 +83,51 @@ const AppContent: React.FC = () => {
         </button>
 
         <div className="mt-8 text-center">
-           <p className="text-xs text-zinc-600 dark:text-zinc-500">
-             &copy; {new Date().getFullYear()} Axis.
-           </p>
+          <p className="text-xs text-zinc-600 dark:text-zinc-500">
+            &copy; {new Date().getFullYear()} Axis.
+          </p>
         </div>
       </div>
 
       {/* Mock Google Account Chooser Modal */}
       {isGoogleLoginOpen && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in p-4">
-           <div className="bg-white dark:bg-zinc-900 w-full max-w-[400px] rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
-              <div className="p-6 pb-4">
-                <div className="flex justify-center mb-4">
-                  <GoogleLogo />
-                </div>
-                <h2 className="text-xl text-center font-medium text-zinc-900 dark:text-white mb-2">Fazer login com o Google</h2>
-                <p className="text-center text-zinc-600 dark:text-zinc-400 text-sm mb-6">Ir para <span className="font-semibold text-amber-600">Axis</span></p>
-
-                <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                  {allUsers.map(user => (
-                    <button
-                      key={user.id}
-                      onClick={() => handleLogin(user)}
-                      className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors border-b border-transparent hover:border-zinc-100 dark:hover:border-zinc-700 text-left group"
-                    >
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${user.role === 'admin' ? 'bg-amber-600' : 'bg-zinc-700'}`}>
-                        {user.avatarInitials}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white truncate">{user.name}</p>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.email}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
+          <div className="bg-white dark:bg-zinc-900 w-full max-w-[400px] rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+            <div className="p-6 pb-4">
+              <div className="flex justify-center mb-4">
+                <GoogleLogo />
               </div>
+              <h2 className="text-xl text-center font-medium text-zinc-900 dark:text-white mb-2">Fazer login com o Google</h2>
+              <p className="text-center text-zinc-600 dark:text-zinc-400 text-sm mb-6">Ir para <span className="font-semibold text-amber-600">Axis</span></p>
 
-              <div className="bg-zinc-50 dark:bg-zinc-800 p-4 border-t border-zinc-100 dark:border-zinc-700 flex justify-end">
-                 <button
-                   onClick={() => setIsGoogleLoginOpen(false)}
-                   className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-white px-4 py-2"
-                 >
-                   Cancelar
-                 </button>
+              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                {allUsers.map(user => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleLogin(user)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors border-b border-transparent hover:border-zinc-100 dark:hover:border-zinc-700 text-left group"
+                  >
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${user.role === 'admin' ? 'bg-amber-600' : 'bg-zinc-700'}`}>
+                      {user.avatarInitials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white truncate">{user.name}</p>
+                      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.email}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
-           </div>
+            </div>
+
+            <div className="bg-zinc-50 dark:bg-zinc-800 p-4 border-t border-zinc-100 dark:border-zinc-700 flex justify-end">
+              <button
+                onClick={() => setIsGoogleLoginOpen(false)}
+                className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-white px-4 py-2"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

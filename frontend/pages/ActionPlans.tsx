@@ -1,27 +1,50 @@
-import React, { useState, useMemo } from 'react';
-import { dataService } from '../services/dataService';
+import React, { useState, useMemo, useEffect } from 'react';
+import { dataService } from '../src/services/dataService';
 import { SECTORS } from '../constants';
-import { PlanStatus, KpiEntry, FiveWTwoH, MONTHS, WEEKS } from '../types';
-import { Edit, Trash2, X, Save, Calendar, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Clock, PauseCircle, LayoutList, KanbanSquare, ArrowRight, Filter, GripVertical, Download, User } from 'lucide-react';
+import { PlanStatus, KpiEntry, FiveWTwoH, MONTHS, WEEKS, User, Sector } from '../types';
+import { Edit, Trash2, X, Save, Calendar, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Clock, PauseCircle, LayoutList, KanbanSquare, ArrowRight, Filter, GripVertical, Download, User as UserIcon } from 'lucide-react';
 import { Button } from '../components/Button';
 import { FiveWTwoHInput } from '../components/FiveWTwoH';
 
 export const ActionPlansPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
-  const [plans, setPlans] = useState(dataService.getAllActionPlans());
+  const [plans, setPlans] = useState<KpiEntry[]>([]);
   const [editingPlan, setEditingPlan] = useState<KpiEntry | null>(null);
-  
+  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   // Drag and Drop States
   const [draggedPlanId, setDraggedPlanId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<PlanStatus | null>(null);
-  
+
   // Filters
   const [filterMonth, setFilterMonth] = useState<string>('Todos');
   const [filterWeek, setFilterWeek] = useState<string>('Todas');
   const [filterLeader, setFilterLeader] = useState<string>('Todos');
 
-  const availableUsers = dataService.getUsers();
-  const sectors = dataService.getSectors();
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [plansData, usersData, sectorsData] = await Promise.all([
+        dataService.getAllActionPlans(),
+        dataService.getUsers(),
+        dataService.getSectors()
+      ]);
+      setPlans(plansData);
+      setAvailableUsers(usersData);
+      setSectors(sectorsData);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // State to toggle visibility of months/weeks for List View
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -37,20 +60,28 @@ export const ActionPlansPage: React.FC = () => {
     'stand_by': { label: 'Stand By', color: 'text-zinc-500 dark:text-zinc-400', border: 'border-zinc-300 dark:border-zinc-600', bg: 'bg-white', darkBg: 'dark:bg-zinc-800/50', icon: PauseCircle },
   };
 
-  const refreshPlans = () => {
-    setPlans(dataService.getAllActionPlans());
+  const refreshPlans = async () => {
+    await loadData();
   };
 
-  const handleStatusChange = (entry: KpiEntry, newStatus: PlanStatus) => {
+  const handleStatusChange = async (entry: KpiEntry, newStatus: PlanStatus) => {
     const updatedEntry = { ...entry, actionPlanStatus: newStatus };
-    dataService.saveEntry(updatedEntry);
-    refreshPlans();
+    try {
+      await dataService.saveEntry(updatedEntry);
+      await refreshPlans();
+    } catch (error) {
+      console.error('Erro ao atualizar status:', error);
+    }
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja excluir este plano de ação? O KPI original será mantido, mas o plano será removido.')) {
-      dataService.removeActionPlan(id);
-      refreshPlans();
+      try {
+        await dataService.removeActionPlan(id);
+        await refreshPlans();
+      } catch (error) {
+        console.error('Erro ao deletar plano:', error);
+      }
     }
   };
 
@@ -58,11 +89,15 @@ export const ActionPlansPage: React.FC = () => {
     setEditingPlan({ ...entry });
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (editingPlan) {
-      dataService.saveEntry(editingPlan);
-      setEditingPlan(null);
-      refreshPlans();
+      try {
+        await dataService.saveEntry(editingPlan);
+        setEditingPlan(null);
+        await refreshPlans();
+      } catch (error) {
+        console.error('Erro ao salvar edição:', error);
+      }
     }
   };
 
@@ -93,7 +128,7 @@ export const ActionPlansPage: React.FC = () => {
   };
 
   const handleDragOver = (e: React.DragEvent, status: PlanStatus) => {
-    e.preventDefault(); 
+    e.preventDefault();
     if (dragOverColumn !== status) {
       setDragOverColumn(status);
     }
@@ -102,7 +137,7 @@ export const ActionPlansPage: React.FC = () => {
   const handleDrop = (e: React.DragEvent, status: PlanStatus) => {
     e.preventDefault();
     setDragOverColumn(null);
-    
+
     if (draggedPlanId) {
       const plan = plans.find(p => p.id === draggedPlanId);
       if (plan && plan.actionPlanStatus !== status) {
@@ -125,11 +160,11 @@ export const ActionPlansPage: React.FC = () => {
   // --- Export Logic ---
   const handleExport = () => {
     const headers = ['Mês', 'Semana', 'Setor', 'KPI', 'Status', 'O Que (What)', 'Por Que (Why)', 'Quem (Who)', 'Onde (Where)', 'Quando (When)', 'Como (How)', 'Quanto (How Much)'];
-    
+
     const csvContent = filteredPlans.map(plan => {
       const sector = sectors.find(s => s.id === plan.sectorId);
       const kpiName = sector?.kpis.find(k => k.id === plan.kpiId)?.name || 'N/A';
-      
+
       return [
         `"${plan.month}"`,
         `"${plan.week}"`,
@@ -192,7 +227,7 @@ export const ActionPlansPage: React.FC = () => {
       'feito': [],
       'stand_by': []
     };
-    
+
     filteredPlans.forEach(plan => {
       const status = plan.actionPlanStatus || 'a_fazer';
       if (columns[status]) {
@@ -231,63 +266,63 @@ export const ActionPlansPage: React.FC = () => {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Gestão de Planos de Ação</h1>
           <p className="text-zinc-500 dark:text-zinc-400">Acompanhamento tático e resolução de problemas.</p>
         </div>
-        
+
         <div className="flex flex-col lg:flex-row gap-3 w-full xl:w-auto items-start lg:items-center">
-          
+
           {/* Enhanced Filter Bar */}
           <div className="flex bg-white dark:bg-zinc-900 rounded-lg border border-zinc-300 dark:border-zinc-800 shadow-sm p-1 gap-1 items-center overflow-x-auto max-w-full">
-             <div className="px-3 py-1.5 text-zinc-400 border-r border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                <span className="text-xs font-bold uppercase tracking-wider hidden md:inline">Filtros</span>
-             </div>
+            <div className="px-3 py-1.5 text-zinc-400 border-r border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
+              <Filter className="w-4 h-4" />
+              <span className="text-xs font-bold uppercase tracking-wider hidden md:inline">Filtros</span>
+            </div>
 
-             {/* Leader Filter */}
-             <select
-                value={filterLeader}
-                onChange={(e) => setFilterLeader(e.target.value)}
-                className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-                style={{ backgroundImage: 'none' }} 
-             >
-                <option value="Todos">Todos os Líderes</option>
-                {availableUsers.map(u => <option key={u.id} value={u.name}>{u.name.split(' ')[0]}</option>)}
-             </select>
-             
-             <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
+            {/* Leader Filter */}
+            <select
+              value={filterLeader}
+              onChange={(e) => setFilterLeader(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
+              style={{ backgroundImage: 'none' }}
+            >
+              <option value="Todos">Todos os Líderes</option>
+              {availableUsers.map(u => <option key={u.id} value={u.name}>{u.name.split(' ')[0]}</option>)}
+            </select>
 
-             {/* Month Filter */}
-             <select
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(e.target.value)}
-                className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-                style={{ backgroundImage: 'none' }}
-             >
-                <option value="Todos">Todos os Meses</option>
-                {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-             </select>
+            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
 
-             <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
+            {/* Month Filter */}
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
+              style={{ backgroundImage: 'none' }}
+            >
+              <option value="Todos">Todos os Meses</option>
+              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
 
-             {/* Week Filter */}
-             <select
-                value={filterWeek}
-                onChange={(e) => setFilterWeek(e.target.value)}
-                className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-                style={{ backgroundImage: 'none' }}
-             >
-                <option value="Todas">Todas as Semanas</option>
-                {WEEKS.map(w => <option key={w} value={w}>{w}</option>)}
-             </select>
+            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
 
-             {/* Clear Filters Button */}
-             {hasActiveFilters && (
-                <button 
-                  onClick={clearFilters}
-                  className="ml-1 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-md transition-colors"
-                  title="Limpar filtros"
-                >
-                   <X className="w-4 h-4" />
-                </button>
-             )}
+            {/* Week Filter */}
+            <select
+              value={filterWeek}
+              onChange={(e) => setFilterWeek(e.target.value)}
+              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
+              style={{ backgroundImage: 'none' }}
+            >
+              <option value="Todas">Todas as Semanas</option>
+              {WEEKS.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+
+            {/* Clear Filters Button */}
+            {hasActiveFilters && (
+              <button
+                onClick={clearFilters}
+                className="ml-1 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-md transition-colors"
+                title="Limpar filtros"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
 
           <div className="hidden lg:block w-px h-8 bg-zinc-300 dark:bg-zinc-700"></div>
@@ -300,13 +335,13 @@ export const ActionPlansPage: React.FC = () => {
 
             {/* View Switcher */}
             <div className="flex bg-zinc-200 dark:bg-zinc-800 p-1 rounded-lg">
-              <button 
+              <button
                 onClick={() => setViewMode('list')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white dark:bg-zinc-600 text-amber-700 dark:text-amber-400 shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'}`}
               >
                 <LayoutList className="w-4 h-4" /> <span className="hidden sm:inline">Lista</span>
               </button>
-              <button 
+              <button
                 onClick={() => setViewMode('kanban')}
                 className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'kanban' ? 'bg-white dark:bg-zinc-600 text-amber-700 dark:text-amber-400 shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'}`}
               >
@@ -334,117 +369,117 @@ export const ActionPlansPage: React.FC = () => {
         <>
           {/* --- KANBAN VIEW --- */}
           {viewMode === 'kanban' && (
-             <div className="flex-1 overflow-x-auto pb-4">
-               <div className="flex gap-4 min-w-[1000px] h-full">
-                 {(Object.keys(statusConfig) as PlanStatus[]).map((status) => {
-                   const config = statusConfig[status];
-                   const items = kanbanColumns[status];
-                   const StatusIcon = config.icon;
-                   const isDragOver = dragOverColumn === status;
+            <div className="flex-1 overflow-x-auto pb-4">
+              <div className="flex gap-4 min-w-[1000px] h-full">
+                {(Object.keys(statusConfig) as PlanStatus[]).map((status) => {
+                  const config = statusConfig[status];
+                  const items = kanbanColumns[status];
+                  const StatusIcon = config.icon;
+                  const isDragOver = dragOverColumn === status;
 
-                   return (
-                     <div 
-                        key={status} 
-                        className={`
+                  return (
+                    <div
+                      key={status}
+                      className={`
                           flex-1 rounded-xl flex flex-col h-fit max-h-full transition-all duration-200
                           ${config.bg} ${config.darkBg} border 
                           ${isDragOver ? 'border-amber-500 ring-2 ring-amber-200 scale-[1.01]' : `${config.border} border-opacity-50`}
                         `}
-                        onDragOver={(e) => handleDragOver(e, status)}
-                        onDrop={(e) => handleDrop(e, status)}
-                     >
-                        {/* Column Header */}
-                        <div className="p-4 flex items-center justify-between border-b border-black/10 dark:border-white/10">
-                          <div className="flex items-center gap-2">
-                             <StatusIcon className={`w-5 h-5 ${config.color}`} />
-                             <h3 className={`font-bold ${config.color}`}>{config.label}</h3>
-                          </div>
-                          <span className={`bg-white/60 dark:bg-black/40 px-2 py-0.5 rounded-full text-xs font-bold ${config.color}`}>
-                            {items.length}
-                          </span>
+                      onDragOver={(e) => handleDragOver(e, status)}
+                      onDrop={(e) => handleDrop(e, status)}
+                    >
+                      {/* Column Header */}
+                      <div className="p-4 flex items-center justify-between border-b border-black/10 dark:border-white/10">
+                        <div className="flex items-center gap-2">
+                          <StatusIcon className={`w-5 h-5 ${config.color}`} />
+                          <h3 className={`font-bold ${config.color}`}>{config.label}</h3>
                         </div>
+                        <span className={`bg-white/60 dark:bg-black/40 px-2 py-0.5 rounded-full text-xs font-bold ${config.color}`}>
+                          {items.length}
+                        </span>
+                      </div>
 
-                        {/* Cards Container */}
-                        <div className="p-3 space-y-3 min-h-[150px]">
-                           {items.map(entry => {
-                              const sector = sectors.find(s => s.id === entry.sectorId);
-                              const isDragging = draggedPlanId === entry.id;
-                              
-                              return (
-                                <div 
-                                  key={entry.id} 
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, entry.id)}
-                                  className={`
+                      {/* Cards Container */}
+                      <div className="p-3 space-y-3 min-h-[150px]">
+                        {items.map(entry => {
+                          const sector = sectors.find(s => s.id === entry.sectorId);
+                          const isDragging = draggedPlanId === entry.id;
+
+                          return (
+                            <div
+                              key={entry.id}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, entry.id)}
+                              className={`
                                     bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 group relative
                                     cursor-move select-none transition-all duration-200
                                     ${isDragging ? 'opacity-50 scale-95 shadow-none' : 'hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700'}
                                   `}
-                                >
-                                  {/* Grip Handle for affordance */}
-                                  <div className="absolute top-1/2 left-1.5 -translate-y-1/2 opacity-0 group-hover:opacity-30 text-zinc-400">
-                                    <GripVertical className="w-4 h-4" />
+                            >
+                              {/* Grip Handle for affordance */}
+                              <div className="absolute top-1/2 left-1.5 -translate-y-1/2 opacity-0 group-hover:opacity-30 text-zinc-400">
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+
+                              {/* Top Meta */}
+                              <div className="flex justify-between items-start mb-2 pl-2">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate max-w-[120px]">
+                                  {sector?.name.replace('Comercial - ', '') || 'Setor Removido'}
+                                </span>
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2 bg-white dark:bg-zinc-900 pl-2">
+                                  <button onClick={() => handleEdit(entry)} className="p-1 text-zinc-400 hover:text-amber-600">
+                                    <Edit className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => handleDelete(entry.id)} className="p-1 text-zinc-400 hover:text-red-600">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Content */}
+                              <p className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm mb-3 line-clamp-3 pl-2" title={entry.actionPlan?.what}>
+                                {entry.actionPlan?.what}
+                              </p>
+
+                              {/* Bottom Meta */}
+                              <div className="flex items-center justify-between mt-auto pl-2">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-600 dark:text-zinc-300" title={entry.actionPlan?.who}>
+                                    {entry.actionPlan?.who.substring(0, 2).toUpperCase()}
                                   </div>
-
-                                  {/* Top Meta */}
-                                  <div className="flex justify-between items-start mb-2 pl-2">
-                                     <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 truncate max-w-[120px]">
-                                       {sector?.name.replace('Comercial - ', '') || 'Setor Removido'}
-                                     </span>
-                                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2 bg-white dark:bg-zinc-900 pl-2">
-                                        <button onClick={() => handleEdit(entry)} className="p-1 text-zinc-400 hover:text-amber-600">
-                                           <Edit className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={() => handleDelete(entry.id)} className="p-1 text-zinc-400 hover:text-red-600">
-                                           <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                     </div>
-                                  </div>
-
-                                  {/* Content */}
-                                  <p className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm mb-3 line-clamp-3 pl-2" title={entry.actionPlan?.what}>
-                                     {entry.actionPlan?.what}
-                                  </p>
-
-                                  {/* Bottom Meta */}
-                                  <div className="flex items-center justify-between mt-auto pl-2">
-                                     <div className="flex items-center gap-2">
-                                        <div className="w-6 h-6 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center text-[10px] font-bold text-zinc-600 dark:text-zinc-300" title={entry.actionPlan?.who}>
-                                           {entry.actionPlan?.who.substring(0,2).toUpperCase()}
-                                        </div>
-                                        <div className="flex items-center text-xs text-zinc-500 dark:text-zinc-400" title="Prazo">
-                                           <Calendar className="w-3 h-3 mr-1" />
-                                           {formatDate(entry.actionPlan?.when)}
-                                        </div>
-                                     </div>
-                                  </div>
-
-                                  {/* Quick Status Change Footer */}
-                                  <div className="mt-3 pt-3 border-t border-zinc-50 dark:border-zinc-800 flex justify-between items-center pl-2">
-                                      <span className="text-[10px] text-zinc-400">Mover para:</span>
-                                      <div className="flex gap-1">
-                                        {(Object.keys(statusConfig) as PlanStatus[]).filter(s => s !== status).map(s => (
-                                          <button 
-                                            key={s}
-                                            onClick={() => handleStatusChange(entry, s)}
-                                            className={`w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 flex items-center justify-center hover:scale-110 transition-transform ${statusConfig[s].bg} ${statusConfig[s].darkBg}`}
-                                            title={`Mover para ${statusConfig[s].label}`}
-                                          >
-                                            {/* @ts-ignore */}
-                                            {React.createElement(statusConfig[s].icon, { className: `w-3 h-3 ${statusConfig[s].color}` })}
-                                          </button>
-                                        ))}
-                                      </div>
+                                  <div className="flex items-center text-xs text-zinc-500 dark:text-zinc-400" title="Prazo">
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {formatDate(entry.actionPlan?.when)}
                                   </div>
                                 </div>
-                              );
-                           })}
-                        </div>
-                     </div>
-                   );
-                 })}
-               </div>
-             </div>
+                              </div>
+
+                              {/* Quick Status Change Footer */}
+                              <div className="mt-3 pt-3 border-t border-zinc-50 dark:border-zinc-800 flex justify-between items-center pl-2">
+                                <span className="text-[10px] text-zinc-400">Mover para:</span>
+                                <div className="flex gap-1">
+                                  {(Object.keys(statusConfig) as PlanStatus[]).filter(s => s !== status).map(s => (
+                                    <button
+                                      key={s}
+                                      onClick={() => handleStatusChange(entry, s)}
+                                      className={`w-5 h-5 rounded-full border border-zinc-200 dark:border-zinc-700 flex items-center justify-center hover:scale-110 transition-transform ${statusConfig[s].bg} ${statusConfig[s].darkBg}`}
+                                      title={`Mover para ${statusConfig[s].label}`}
+                                    >
+                                      {/* @ts-ignore */}
+                                      {React.createElement(statusConfig[s].icon, { className: `w-3 h-3 ${statusConfig[s].color}` })}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* --- LIST VIEW --- */}
@@ -459,12 +494,12 @@ export const ActionPlansPage: React.FC = () => {
 
                   {group.weeks.map((weekGroup) => {
                     const groupKey = `${group.month}-${weekGroup.week}`;
-                    const isExpanded = expandedGroups[groupKey] !== false; 
+                    const isExpanded = expandedGroups[groupKey] !== false;
                     const summary = getStatusSummary(weekGroup.items);
 
                     return (
                       <div key={weekGroup.week} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-all duration-300">
-                        <div 
+                        <div
                           className="bg-zinc-50 dark:bg-zinc-800 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => toggleGroup(groupKey)}
                         >
@@ -473,7 +508,7 @@ export const ActionPlansPage: React.FC = () => {
                             <h3 className="font-bold text-lg text-zinc-700 dark:text-zinc-200">{weekGroup.week}</h3>
                             <span className="text-zinc-400 text-sm hidden md:inline">• {weekGroup.items.length} Ações</span>
                           </div>
-                          
+
                           <div className="flex gap-2 mt-2 md:mt-0">
                             {summary.done > 0 && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300">{summary.done} Feito(s)</span>}
                             {summary.doing > 0 && <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300">{summary.doing} Fazendo</span>}
@@ -509,16 +544,16 @@ export const ActionPlansPage: React.FC = () => {
                                             <StatusIcon className="w-3.5 h-3.5" />
                                             {config.label}
                                           </div>
-                                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                              {(Object.keys(statusConfig) as PlanStatus[]).map(s => (
-                                                <button 
-                                                  key={s}
-                                                  onClick={(e) => { e.stopPropagation(); handleStatusChange(entry, s); }}
-                                                  className={`w-4 h-4 rounded hover:scale-110 transition-transform border ${statusConfig[s].border} ${s === status ? statusConfig[s].bg.replace('50', '200') : 'bg-white dark:bg-zinc-800'}`}
-                                                  title={statusConfig[s].label}
-                                                />
-                                              ))}
-                                           </div>
+                                          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {(Object.keys(statusConfig) as PlanStatus[]).map(s => (
+                                              <button
+                                                key={s}
+                                                onClick={(e) => { e.stopPropagation(); handleStatusChange(entry, s); }}
+                                                className={`w-4 h-4 rounded hover:scale-110 transition-transform border ${statusConfig[s].border} ${s === status ? statusConfig[s].bg.replace('50', '200') : 'bg-white dark:bg-zinc-800'}`}
+                                                title={statusConfig[s].label}
+                                              />
+                                            ))}
+                                          </div>
                                         </div>
                                       </td>
                                       <td className="px-6 py-4 align-top">
@@ -531,7 +566,7 @@ export const ActionPlansPage: React.FC = () => {
                                       <td className="px-6 py-4 align-top">
                                         <div className="flex items-center gap-2">
                                           <div className="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-xs font-bold text-zinc-600 dark:text-zinc-300">
-                                            {entry.actionPlan?.who.substring(0,2).toUpperCase()}
+                                            {entry.actionPlan?.who.substring(0, 2).toUpperCase()}
                                           </div>
                                           <span className="text-zinc-700 dark:text-zinc-300">{entry.actionPlan?.who}</span>
                                         </div>
@@ -582,32 +617,31 @@ export const ActionPlansPage: React.FC = () => {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Status Atual</label>
                 <div className="flex gap-2">
                   {(Object.keys(statusConfig) as PlanStatus[]).map((status) => (
-                     <button
-                        key={status}
-                        onClick={() => setEditingPlan({...editingPlan, actionPlanStatus: status})}
-                        className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all flex items-center gap-2 ${
-                          editingPlan.actionPlanStatus === status 
-                            ? `${statusConfig[status].bg.replace('50', '100')} ${statusConfig[status].darkBg} ${statusConfig[status].color} ${statusConfig[status].border} ring-2 ring-offset-1 ring-amber-200 dark:ring-amber-900` 
-                            : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                    <button
+                      key={status}
+                      onClick={() => setEditingPlan({ ...editingPlan, actionPlanStatus: status })}
+                      className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all flex items-center gap-2 ${editingPlan.actionPlanStatus === status
+                        ? `${statusConfig[status].bg.replace('50', '100')} ${statusConfig[status].darkBg} ${statusConfig[status].color} ${statusConfig[status].border} ring-2 ring-offset-1 ring-amber-200 dark:ring-amber-900`
+                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'
                         }`}
-                     >
-                       {/* @ts-ignore */}
-                       {React.createElement(statusConfig[status].icon, { className: "w-4 h-4" })}
-                       {statusConfig[status].label}
-                     </button>
+                    >
+                      {/* @ts-ignore */}
+                      {React.createElement(statusConfig[status].icon, { className: "w-4 h-4" })}
+                      {statusConfig[status].label}
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <FiveWTwoHInput 
-                data={editingPlan.actionPlan} 
-                onChange={updateEditForm} 
+              <FiveWTwoHInput
+                data={editingPlan.actionPlan}
+                onChange={updateEditForm}
                 availableUsers={availableUsers}
               />
             </div>

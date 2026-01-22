@@ -1,26 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sector, KPI, User } from '../types';
-import { dataService } from '../services/dataService';
+import { dataService } from '../src/services/dataService';
 import { Button } from '../components/Button';
 import { Edit, Trash2, Plus, Settings, ChevronRight, ChevronDown, Save, X, User as UserIcon, Shield } from 'lucide-react';
 
 export const StructureManagementPage: React.FC = () => {
-  const [sectors, setSectors] = useState<Sector[]>(dataService.getSectors());
-  const [users, setUsers] = useState<User[]>(dataService.getUsers());
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [expandedSectorId, setExpandedSectorId] = useState<string | null>(null);
-  
+  const [isLoading, setIsLoading] = useState(true);
+
   // Modals state
   const [isSectorModalOpen, setIsSectorModalOpen] = useState(false);
   const [editingSector, setEditingSector] = useState<Partial<Sector>>({});
   const [selectedLeaderId, setSelectedLeaderId] = useState<string>(''); // For the modal dropdown
-  
+
   const [isKPIModalOpen, setIsKPIModalOpen] = useState(false);
   const [editingKPI, setEditingKPI] = useState<Partial<KPI>>({});
   const [activeSectorIdForKPI, setActiveSectorIdForKPI] = useState<string | null>(null);
 
-  const refreshData = () => {
-    setSectors([...dataService.getSectors()]);
-    setUsers([...dataService.getUsers()]);
+  // Load data on mount
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [sectorsData, usersData] = await Promise.all([
+        dataService.getSectors(),
+        dataService.getUsers()
+      ]);
+      setSectors(sectorsData);
+      setUsers(usersData);
+    } catch (error) {
+      console.error('Erro ao carregar dados:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshData = async () => {
+    await loadData();
   };
 
   const toggleExpand = (id: string) => {
@@ -41,37 +62,45 @@ export const StructureManagementPage: React.FC = () => {
     setIsSectorModalOpen(true);
   };
 
-  const handleSaveSector = () => {
+  const handleSaveSector = async () => {
     if (!editingSector.name) return;
-    
+
     const id = editingSector.id || Math.random().toString(36).substr(2, 9);
     const newSector: Sector = {
       id,
       name: editingSector.name,
       kpis: editingSector.kpis || []
     };
-    
-    // 1. Save the Sector
-    dataService.saveSector(newSector);
 
-    // 2. Handle Leader Linking
-    if (selectedLeaderId) {
-      const userToLink = users.find(u => u.id === selectedLeaderId);
-      if (userToLink) {
-        // Update user to point to this new/edited sector
-        const updatedUser = { ...userToLink, sectorId: id };
-        dataService.updateUser(updatedUser);
+    try {
+      // 1. Save the Sector
+      await dataService.saveSector(newSector);
+
+      // 2. Handle Leader Linking
+      if (selectedLeaderId) {
+        const userToLink = users.find(u => u.id === selectedLeaderId);
+        if (userToLink) {
+          // Update user to point to this new/edited sector
+          const updatedUser = { ...userToLink, sectorId: id };
+          await dataService.updateUser(updatedUser);
+        }
       }
+
+      setIsSectorModalOpen(false);
+      await refreshData();
+    } catch (error) {
+      console.error('Erro ao salvar setor:', error);
     }
-    
-    setIsSectorModalOpen(false);
-    refreshData();
   };
 
-  const handleDeleteSector = (id: string) => {
+  const handleDeleteSector = async (id: string) => {
     if (confirm('Tem certeza? Isso apagará todos os KPIs associados a este setor.')) {
-      dataService.deleteSector(id);
-      refreshData();
+      try {
+        await dataService.deleteSector(id);
+        await refreshData();
+      } catch (error) {
+        console.error('Erro ao deletar setor:', error);
+      }
     }
   };
 
@@ -88,9 +117,9 @@ export const StructureManagementPage: React.FC = () => {
     setIsKPIModalOpen(true);
   };
 
-  const handleSaveKPI = () => {
+  const handleSaveKPI = async () => {
     if (!activeSectorIdForKPI || !editingKPI.name) return;
-    
+
     const id = editingKPI.id || `kpi_${Math.random().toString(36).substr(2, 6)}`;
     const newKPI: KPI = {
       id,
@@ -98,16 +127,24 @@ export const StructureManagementPage: React.FC = () => {
       unit: editingKPI.unit || 'number',
       format: editingKPI.format || ''
     };
-    
-    dataService.saveKPI(activeSectorIdForKPI, newKPI);
-    setIsKPIModalOpen(false);
-    refreshData();
+
+    try {
+      await dataService.saveKPI(activeSectorIdForKPI, newKPI);
+      setIsKPIModalOpen(false);
+      await refreshData();
+    } catch (error) {
+      console.error('Erro ao salvar KPI:', error);
+    }
   };
 
-  const handleDeleteKPI = (sectorId: string, kpiId: string) => {
+  const handleDeleteKPI = async (sectorId: string, kpiId: string) => {
     if (confirm('Tem certeza que deseja remover este KPI?')) {
-      dataService.deleteKPI(sectorId, kpiId);
-      refreshData();
+      try {
+        await dataService.deleteKPI(sectorId, kpiId);
+        await refreshData();
+      } catch (error) {
+        console.error('Erro ao deletar KPI:', error);
+      }
     }
   };
 
@@ -131,18 +168,18 @@ export const StructureManagementPage: React.FC = () => {
       <div className="grid gap-4">
         {sectors.map(sector => {
           const sectorUsers = getSectorUsers(sector.id);
-          
+
           return (
             <div key={sector.id} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-colors">
               <div className="p-4 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950 border-b border-zinc-100 dark:border-zinc-800">
-                <div 
+                <div
                   className="flex items-center gap-3 cursor-pointer select-none flex-1"
                   onClick={() => toggleExpand(sector.id)}
                 >
                   {expandedSectorId === sector.id ? <ChevronDown className="text-zinc-400" /> : <ChevronRight className="text-zinc-400" />}
                   <div>
                     <div className="font-bold text-lg text-zinc-800 dark:text-zinc-100">{sector.name}</div>
-                    
+
                     {/* Display Associated Leaders/Users */}
                     {sectorUsers.length > 0 && (
                       <div className="flex items-center gap-2 mt-1">
@@ -158,22 +195,22 @@ export const StructureManagementPage: React.FC = () => {
                     )}
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   <span className="text-xs font-medium bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 px-2 py-0.5 rounded-full">
                     {sector.kpis.length} KPIs
                   </span>
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleEditSector(sector)} className="p-2 text-zinc-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-zinc-800 rounded-lg" title="Editar Setor">
-                        <Edit className="w-4 h-4" />
+                      <Edit className="w-4 h-4" />
                     </button>
                     <button onClick={() => handleDeleteSector(sector.id)} className="p-2 text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-zinc-800 rounded-lg" title="Excluir Setor">
-                        <Trash2 className="w-4 h-4" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
               </div>
-              
+
               {expandedSectorId === sector.id && (
                 <div className="p-4 bg-white dark:bg-zinc-900">
                   <div className="flex justify-between items-center mb-4">
@@ -191,21 +228,21 @@ export const StructureManagementPage: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {sector.kpis.map(kpi => (
                         <div key={kpi.id} className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 flex justify-between items-center hover:shadow-sm transition-shadow bg-zinc-50 dark:bg-zinc-950/50">
-                            <div>
-                              <div className="font-semibold text-zinc-700 dark:text-zinc-200">{kpi.name}</div>
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400 flex gap-2">
-                                <span>Tipo: {kpi.unit}</span>
-                                {kpi.format && <span>Fmt: {kpi.format}</span>}
-                              </div>
+                          <div>
+                            <div className="font-semibold text-zinc-700 dark:text-zinc-200">{kpi.name}</div>
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400 flex gap-2">
+                              <span>Tipo: {kpi.unit}</span>
+                              {kpi.format && <span>Fmt: {kpi.format}</span>}
                             </div>
-                            <div className="flex gap-1">
-                              <button onClick={() => handleEditKPI(sector.id, kpi)} className="p-1.5 text-zinc-400 hover:text-amber-600 rounded">
-                                  <Edit className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={() => handleDeleteKPI(sector.id, kpi.id)} className="p-1.5 text-zinc-400 hover:text-red-600 rounded">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
+                          </div>
+                          <div className="flex gap-1">
+                            <button onClick={() => handleEditKPI(sector.id, kpi)} className="p-1.5 text-zinc-400 hover:text-amber-600 rounded">
+                              <Edit className="w-3.5 h-3.5" />
+                            </button>
+                            <button onClick={() => handleDeleteKPI(sector.id, kpi.id)} className="p-1.5 text-zinc-400 hover:text-red-600 rounded">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -222,18 +259,18 @@ export const StructureManagementPage: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 animate-fade-in border border-zinc-200 dark:border-zinc-800">
             <div className="flex justify-between items-center mb-4">
-               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{editingSector.id ? 'Editar Setor' : 'Novo Setor'}</h2>
-               <button onClick={() => setIsSectorModalOpen(false)}><X className="text-zinc-400" /></button>
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{editingSector.id ? 'Editar Setor' : 'Novo Setor'}</h2>
+              <button onClick={() => setIsSectorModalOpen(false)}><X className="text-zinc-400" /></button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nome do Setor</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none"
                   value={editingSector.name || ''}
-                  onChange={e => setEditingSector({...editingSector, name: e.target.value})}
+                  onChange={e => setEditingSector({ ...editingSector, name: e.target.value })}
                   placeholder="Ex: Marketing Digital"
                 />
               </div>
@@ -271,46 +308,46 @@ export const StructureManagementPage: React.FC = () => {
       {isKPIModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 animate-fade-in border border-zinc-200 dark:border-zinc-800">
-             <div className="flex justify-between items-center mb-4">
-               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{editingKPI.id ? 'Editar KPI' : 'Novo KPI'}</h2>
-               <button onClick={() => setIsKPIModalOpen(false)}><X className="text-zinc-400" /></button>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-zinc-900 dark:text-white">{editingKPI.id ? 'Editar KPI' : 'Novo KPI'}</h2>
+              <button onClick={() => setIsKPIModalOpen(false)}><X className="text-zinc-400" /></button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nome do KPI</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500 outline-none"
                   value={editingKPI.name || ''}
-                  onChange={e => setEditingKPI({...editingKPI, name: e.target.value})}
+                  onChange={e => setEditingKPI({ ...editingKPI, name: e.target.value })}
                   placeholder="Ex: Custo por Lead"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Tipo de Dado</label>
-                    <select 
-                      className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                      value={editingKPI.unit}
-                      onChange={e => setEditingKPI({...editingKPI, unit: e.target.value as any})}
-                    >
-                      <option value="number">Número</option>
-                      <option value="currency">Moeda (R$)</option>
-                      <option value="percent">Porcentagem (%)</option>
-                    </select>
-                 </div>
-                 <div>
-                    <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Prefixo/Sufixo (Visual)</label>
-                    <input 
-                      type="text" 
-                      className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                      value={editingKPI.format || ''}
-                      onChange={e => setEditingKPI({...editingKPI, format: e.target.value})}
-                      placeholder="Ex: R$, %, un."
-                    />
-                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Tipo de Dado</label>
+                  <select
+                    className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    value={editingKPI.unit}
+                    onChange={e => setEditingKPI({ ...editingKPI, unit: e.target.value as any })}
+                  >
+                    <option value="number">Número</option>
+                    <option value="currency">Moeda (R$)</option>
+                    <option value="percent">Porcentagem (%)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Prefixo/Sufixo (Visual)</label>
+                  <input
+                    type="text"
+                    className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
+                    value={editingKPI.format || ''}
+                    onChange={e => setEditingKPI({ ...editingKPI, format: e.target.value })}
+                    placeholder="Ex: R$, %, un."
+                  />
+                </div>
               </div>
             </div>
 
