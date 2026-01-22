@@ -3,13 +3,14 @@
 ## Status Atual - Janeiro 2026
 **✅ MVP Funcional Completo** - Backend + Frontend integrados e funcionando
 
-### Progresso Geral: 90% Concluído
+### Progresso Geral: 95% Concluído
 - ✅ **Backend Core**: Todas as entidades, repositórios, serviços e rotas implementadas
+- ✅ **Dashboard Analytics**: 6 endpoints de analytics implementados e funcionais
 - ✅ **Frontend Integration**: 100% refatorado para async/await com loading states
 - ✅ **Code Organization**: Estrutura de serviços consolidada e otimizada
 - ✅ **Database**: SQLite com seed data (5 usuários, 4 setores, 12 KPIs)
 - ✅ **CORS & Environment**: Configurado para desenvolvimento
-- ⏳ **Próximos**: Dashboard analytics endpoints, testes, documentação completa
+- ⏳ **Próximos**: Middleware, DTOs, testes, documentação completa
 
 ### Funcionalidades Ativas
 - 🔐 Login com usuários reais do backend
@@ -93,7 +94,7 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 3.5: Integração Frontend-Backend (Refatoração Incremental)
+## Etapa 3.5: Integração Frontend-Backend (Refatoração Incremental) ✅ COMPLETA
 
 **Objetivo**: Refatorar o frontend para consumir APIs reais do backend de forma incremental, em paralelo com o desenvolvimento
 
@@ -103,15 +104,17 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
   - [x] Criar arquivo `src/services/api.ts` com configuração do fetch/axios
   - [x] Configurar base URL (http://localhost:3000/api)
   - [x] Implementar interceptadores para tratamento de erros
+  - [x] Adicionar validação de query parameters (ignora undefined/null)
 
 ### 3.5.2 - Refatorar DataService para Chamar Backend ✅ COMPLETA
 - **Objetivo**: Substituir dados mockados por chamadas HTTP
 - **Tarefas**:
   - [x] Criar métodos que chamam `GET /api/users`
   - [x] Criar métodos que chamam `GET /api/sectors`
-  - [x] Implementar cache local para reduzir requests (opcional)
+  - [x] Implementar cache local para reduzir requests (5 minutos)
   - [x] Adicionar loading states durante requisições
   - [x] Implementar tratamento de erros com feedback ao usuário
+  - [x] Adicionar invalidação de cache em operações de escrita
 
 ### 3.5.3 - Atualizar Estrutura do Frontend ✅ COMPLETA
 - **Objetivo**: Preparar o frontend para dados dinâmicos
@@ -122,7 +125,21 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
   - [x] Adicionar tratamento de erro genérico
   - [x] Adicionar função de retry para requisições falhadas
 
-### 3.5.4 - Testar Integração por Página ✅ COMPLETA
+### 3.5.4 - Organização do Código ✅ COMPLETA
+- **Objetivo**: Consolidar estrutura de serviços
+- **Tarefas**:
+  - [x] Consolidar `api.ts` e `dataService.ts` em `src/services/`
+  - [x] Remover arquivos duplicados em `services/`
+  - [x] Atualizar todos os imports para usar `src/services/`
+  - [x] Converter todas as páginas para async/await:
+    - [x] App.tsx
+    - [x] Dashboard.tsx
+    - [x] DataEntry.tsx
+    - [x] UserManagement.tsx
+    - [x] StructureManagement.tsx
+    - [x] ActionPlans.tsx
+
+### 3.5.5 - Testar Integração por Página ✅ COMPLETA
 - **Objetivo**: Validar funcionamento de cada página com dados reais
 - **Tarefas após cada etapa de backend**:
   - [x] Etapa 4 (Usuários): Testar UserManagementPage + Dashboard ✅
@@ -133,7 +150,7 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
   - [x] Correções implementadas: CORS, query params, async loading states
 
 **Tempo estimado**: 2 horas iniciais + 1 hora por teste incremental
-**Status**: ✅ CONCLUÍDO - Todas as páginas principais atualizadas para async
+**Status**: ✅ CONCLUÍDO - Todas as páginas atualizadas para async/await com error handling
 
 ## Etapa 4: Rotas de Autenticação e Usuários ✅ COMPLETA (Parte 4.1)
 
@@ -236,25 +253,33 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 8: Rotas de Dashboard e Relatórios
+## Etapa 8: Rotas de Dashboard e Relatórios ✅ COMPLETA
 
-### 8.1 - Endpoints de Analytics
+### 8.1 - Endpoints de Analytics ✅ COMPLETA
 - **Objetivo**: Fornecer dados agregados para o Dashboard
 - **Endpoints**:
-  - [ ] `GET /api/dashboard/health-index?month=...&week=...` - KPI Health Index
+  - [x] `GET /api/dashboard/health-index?month=...&week=...` - KPI Health Index
     - Retorna: onTrack, warning, critical
-  - [ ] `GET /api/dashboard/trend-analysis?months=3` - Análise de tendência
+  - [x] `GET /api/dashboard/trend-analysis?months=3` - Análise de tendência
     - Retorna: dados históricos por mês
-  - [ ] `GET /api/dashboard/financial-bridge?month=...&week=...` - Ponte Financeira
+  - [x] `GET /api/dashboard/financial-bridge?month=...&week=...` - Ponte Financeira
     - Retorna: target vs realized por setor
-  - [ ] `GET /api/dashboard/plan-stats?month=...` - Estatísticas de Planos
+  - [x] `GET /api/dashboard/plan-stats?month=...` - Estatísticas de Planos
     - Retorna: total, a_fazer, fazendo, feito, stand_by
-  - [ ] `GET /api/dashboard/aging-plans?month=...` - Envelhecimento de Planos
+  - [x] `GET /api/dashboard/aging-plans?month=...` - Envelhecimento de Planos
     - Retorna: planos por faixa de dias aberto
-  - [ ] `GET /api/dashboard/root-cause-cloud?month=...` - Nuvem de Causas Raiz
+  - [x] `GET /api/dashboard/root-cause-cloud?month=...` - Nuvem de Causas Raiz
     - Retorna: causas agrupadas com frequência
 
+**Implementação**:
+- [x] DashboardService.ts - Service com lógica de analytics
+- [x] dashboardRoutes.ts - Rotas RESTful
+- [x] Registrado no server.ts
+- [x] Métodos adicionados ao dataService.ts do frontend
+- [x] Frontend pronto para consumir endpoints (Dashboard.tsx já usa cálculos locais)
+
 **Tempo estimado**: 4-5 horas
+**Status**: ✅ CONCLUÍDO
 
 ---
 
@@ -389,7 +414,7 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 | 5 | Setores e KPIs | 3-4h | ✅ | 16-21h |
 | 6 | KpiEntry | 3-4h | ✅ | 19-25h |
 | 7 | Action Plans | 3-4h | ✅ | 22-29h |
-| 8 | Dashboard Analytics | 4-5h | ⏳ Próxima | 26-34h |
+| 8 | Dashboard Analytics | 4-5h | ✅ | 26-34h |
 | 9 | Middleware e Erros | 2-3h | - | 28-37h |
 | 10 | DTOs e Validação | 2-3h | - | 30-40h |
 | 11 | Testes | 4-5h | - | 34-45h |
@@ -412,14 +437,13 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ### Fase 2 - Funcionalidades Avançadas (Semana 2) ⏳ EM ANDAMENTO
 1. ✅ Etapas 7 (Action Plans) - Implementado
-2. ⏳ Etapa 8 (Dashboard Analytics) - Próxima prioridade
-3. ⏳ Etapas 9-10 (Middleware, DTOs, Validação)
-4. ⏳ Etapa 3.5 (Refatoração do Frontend - Parte 2 - páginas restantes)
-5. ⏳ Testes completos e documentação
+2. ✅ Etapa 8 (Dashboard Analytics) - Implementado
+3. ⏳ Etapas 9-10 (Middleware, DTOs, Validação) - Próxima prioridade
+4. ⏳ Testes completos e documentação
 
 ### Próximas Ações Imediatas
-1. **Implementar Etapa 8**: Endpoints de analytics para Dashboard
-2. **Atualizar páginas restantes**: StructureManagement, DataEntry, ActionPlans para async
+1. **Implementar Etapa 9**: Middleware (autenticação, logging, CORS, validação)
+2. **Implementar Etapa 10**: DTOs e validação com class-validator
 3. **Testes funcionais**: Validar CRUD completo em todas as páginas
 4. **Documentação**: Swagger/OpenAPI para API
 
@@ -494,26 +518,28 @@ A integração será feita de forma **incremental e paralela**:
 Sistema AXIS com **backend completo e frontend integrado**, pronto para uso em produção MVP.
 
 ### ✅ Entregáveis Concluídos
-- **Backend**: 33 endpoints RESTful, 6 entidades com relacionamentos, validações automáticas
+- **Backend**: 39 endpoints RESTful (33 CRUD + 6 analytics), 6 entidades com relacionamentos, validações automáticas
 - **Frontend**: Refatorado para APIs reais, loading states, error handling
 - **Database**: SQLite com seed data realista (5 usuários, 4 setores, 12 KPIs)
 - **Integração**: CORS configurado, environment variables, documentação básica
+- **Analytics**: Dashboard com 6 endpoints de métricas agregadas
 
 ### 🚀 Sistema Funcional
 - **Login**: Usuários carregados do backend
-- **Dashboard**: Dados dinâmicos com filtros e analytics
+- **Dashboard**: Dados dinâmicos com filtros e analytics (6 endpoints prontos)
 - **Gestão**: CRUD completo para usuários, setores, KPIs
 - **Dados**: Entradas de KPI com cálculos automáticos
 - **Planos**: Sistema 5W2H com tracking de status
+- **Analytics**: Health index, trend analysis, financial bridge, plan stats, aging, root cause cloud
 
 ### 📈 Próximos Passos
-1. **Dashboard Analytics** (Etapa 8) - Endpoints para métricas agregadas
-2. **Páginas Restantes** - StructureManagement, DataEntry, ActionPlans (async)
+1. **Middleware** (Etapa 9) - Autenticação, logging, validação global
+2. **DTOs** (Etapa 10) - Validação de entrada com class-validator
 3. **Testes** - Cobertura mínima 70%
 4. **Documentação** - Swagger/OpenAPI completo
 
 ### ⏱️ Status do Projeto
-- **Progresso**: 85% concluído
-- **Tempo Investido**: ~25-30 horas
-- **Tempo Restante**: ~6-18 horas
-- **Status**: MVP funcional, pronto para refinamentos finais
+- **Progresso**: 95% concluído
+- **Tempo Investido**: ~30-34 horas
+- **Tempo Restante**: ~4-14 horas
+- **Status**: MVP funcional com analytics, pronto para refinamentos finais

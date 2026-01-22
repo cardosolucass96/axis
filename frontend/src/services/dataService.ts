@@ -222,6 +222,61 @@ export const dataService = {
     }
   },
 
+  // ===== DASHBOARD ANALYTICS =====
+  getDashboardHealthIndex: async (month?: string, week?: string) => {
+    try {
+      return await api.dashboard.healthIndex({ month, week });
+    } catch (error) {
+      console.error('Erro ao buscar health index:', error);
+      return { onTrack: 0, warning: 0, critical: 0 };
+    }
+  },
+
+  getDashboardTrendAnalysis: async (months: number = 6) => {
+    try {
+      return await api.dashboard.trendAnalysis({ months });
+    } catch (error) {
+      console.error('Erro ao buscar trend analysis:', error);
+      return [];
+    }
+  },
+
+  getDashboardFinancialBridge: async (month?: string, week?: string) => {
+    try {
+      return await api.dashboard.financialBridge({ month, week });
+    } catch (error) {
+      console.error('Erro ao buscar financial bridge:', error);
+      return { data: [], totalTarget: 0, totalRealized: 0 };
+    }
+  },
+
+  getDashboardPlanStats: async (month?: string) => {
+    try {
+      return await api.dashboard.planStats({ month });
+    } catch (error) {
+      console.error('Erro ao buscar plan stats:', error);
+      return { total: 0, a_fazer: 0, fazendo: 0, feito: 0, stand_by: 0 };
+    }
+  },
+
+  getDashboardAgingPlans: async (month?: string) => {
+    try {
+      return await api.dashboard.agingPlans({ month });
+    } catch (error) {
+      console.error('Erro ao buscar aging plans:', error);
+      return [];
+    }
+  },
+
+  getDashboardRootCauseCloud: async (month?: string) => {
+    try {
+      return await api.dashboard.rootCauseCloud({ month });
+    } catch (error) {
+      console.error('Erro ao buscar root cause cloud:', error);
+      return [];
+    }
+  },
+
   // ===== HEALTH CHECK =====
   checkHealth: async (): Promise<boolean> => {
     try {

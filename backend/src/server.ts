@@ -7,8 +7,7 @@ import { userRoutes } from "./routes/userRoutes.js";
 import { sectorRoutes, kpiRoutes } from "./routes/sectorRoutes.js";
 import { entryRoutes } from "./routes/entryRoutes.js";
 import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
-import { entryRoutes } from "./routes/entryRoutes.js";
-import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
+import { dashboardRoutes } from "./routes/dashboardRoutes.js";
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -16,12 +15,12 @@ dotenv.config();
 // Configuração do servidor
 const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
-const CORS_ORIGIN = process.env.CORS_ORIGIN 
+const CORS_ORIGIN = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",")
     : ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
 
-const fastify = Fastify({ 
-    logger: process.env.NODE_ENV === "development" 
+const fastify = Fastify({
+    logger: process.env.NODE_ENV === "development"
 });
 
 // Register CORS plugin
@@ -34,9 +33,9 @@ fastify.register(cors, {
 fastify.get("/health", async (request, reply) => {
     // Verifica se a conexão com o banco está ativa
     if (!AppDataSource.isInitialized) {
-        return reply.code(503).send({ 
-            status: "error", 
-            message: "Serviço indisponível: Banco de dados desconectado" 
+        return reply.code(503).send({
+            status: "error",
+            message: "Serviço indisponível: Banco de dados desconectado"
         });
     }
 
@@ -54,6 +53,7 @@ fastify.register(sectorRoutes);
 fastify.register(kpiRoutes);
 fastify.register(entryRoutes);
 fastify.register(actionPlanRoutes);
+fastify.register(dashboardRoutes);
 
 const start = async () => {
     try {
