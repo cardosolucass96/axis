@@ -1,19 +1,19 @@
 import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, PenTool, ClipboardList, Menu, X, TrendingUp, Users, LogOut, Settings, Sun, Moon } from 'lucide-react';
 import { User } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface LayoutProps {
   children: React.ReactNode;
-  currentPage: string;
-  onNavigate: (page: string) => void;
   currentUser: User | null;
   onLogout: () => void;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigate, currentUser, onLogout }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout }) => {
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(false);
   const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
 
   // Define navigation items with required roles
   const allNavItems = [
@@ -67,23 +67,25 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentPage, onNavigat
         </div>
         
         <nav className="p-4 space-y-2 flex-1">
-          {navItems.map((item) => (
-            <button
-              key={item.id}
-              onClick={() => {
-                onNavigate(item.id);
-                setIsSidebarOpen(false);
-              }}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                currentPage === item.id 
-                  ? 'bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20' 
-                  : 'text-zinc-400 hover:bg-zinc-800 dark:hover:bg-zinc-900 hover:text-amber-500'
-              }`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span className="font-medium">{item.label}</span>
-            </button>
-          ))}
+          {navItems.map((item) => {
+            const path = `/${item.id}`;
+            const isActive = location.pathname === path;
+            return (
+              <Link
+                key={item.id}
+                to={path}
+                onClick={() => setIsSidebarOpen(false)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                  isActive
+                    ? 'bg-amber-500 text-black font-bold shadow-lg shadow-amber-500/20'
+                    : 'text-zinc-400 hover:bg-zinc-800 dark:hover:bg-zinc-900 hover:text-amber-500'
+                }`}
+              >
+                <item.icon className="w-5 h-5" />
+                <span className="font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-zinc-800 dark:border-zinc-900 bg-zinc-900 dark:bg-black">
