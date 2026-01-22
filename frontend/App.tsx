@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { DataEntryPage } from './pages/DataEntry';
@@ -27,8 +27,25 @@ const AppContent: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [isGoogleLoginOpen, setIsGoogleLoginOpen] = useState(false);
-  
-  const allUsers = dataService.getUsers();
+  const [allUsers, setAllUsers] = useState<User[]>([]);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+
+  // Carregar usuários ao montar o componente
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        setIsLoadingUsers(true);
+        const users = await dataService.getUsers();
+        setAllUsers(users);
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+      } finally {
+        setIsLoadingUsers(false);
+      }
+    };
+    
+    loadUsers();
+  }, []);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
@@ -80,10 +97,11 @@ const AppContent: React.FC = () => {
 
           <button 
             onClick={() => setIsGoogleLoginOpen(true)}
-            className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg border border-zinc-200 active:scale-95"
+            disabled={isLoadingUsers}
+            className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg border border-zinc-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <GoogleLogo />
-            <span>Entrar com Google</span>
+            <span>{isLoadingUsers ? 'Carregando...' : 'Entrar com Google'}</span>
           </button>
 
           <div className="mt-8 text-center">

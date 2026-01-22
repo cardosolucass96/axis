@@ -40,10 +40,12 @@ async function request<T>(
 ): Promise<T> {
     const url = new URL(`${API_BASE_URL}${endpoint}`);
 
-    // Adicionar query parameters
+    // Adicionar query parameters (ignorar undefined)
     if (options?.query) {
         Object.entries(options.query).forEach(([key, value]) => {
-            url.searchParams.append(key, String(value));
+            if (value !== undefined && value !== null) {
+                url.searchParams.append(key, String(value));
+            }
         });
     }
 

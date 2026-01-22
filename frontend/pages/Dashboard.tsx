@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { dataService } from '../services/dataService';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, 
@@ -7,14 +7,36 @@ import {
 import { AlertCircle, CheckCircle2, Clock, PauseCircle, TrendingUp, TrendingDown, DollarSign, Target, Hourglass, BrainCircuit, Filter, X, Calendar } from 'lucide-react';
 import { MONTHS, WEEKS } from '../types';
 import { Button } from '../components/Button';
+import type { KpiEntry, Sector } from '../types';
 
 export const Dashboard: React.FC = () => {
   // State for Filters
   const [filterMonth, setFilterMonth] = useState<string>('Todos');
   const [filterWeek, setFilterWeek] = useState<string>('Todas');
+  const [entries, setEntries] = useState<KpiEntry[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const entries = dataService.getEntries();
-  const sectors = dataService.getSectors();
+  // Carregar dados ao montar
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [entriesData, sectorsData] = await Promise.all([
+          dataService.getEntries(),
+          dataService.getSectors()
+        ]);
+        setEntries(entriesData);
+        setSectors(sectorsData);
+      } catch (error) {
+        console.error('Erro ao carregar dados do dashboard:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   // --- Filter Logic ---
   const filteredEntries = useMemo(() => {
@@ -213,6 +235,17 @@ export const Dashboard: React.FC = () => {
 
   }, [filteredEntries]);
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-zinc-500 dark:text-zinc-400">Carregando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-fade-in pb-12">

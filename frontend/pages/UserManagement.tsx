@@ -1,32 +1,52 @@
-import React, { useState } from 'react';
-import { User } from '../types';
+import React, { useState, useEffect } from 'react';
+import { User, Sector } from '../types';
 import { dataService } from '../services/dataService';
 import { Button } from '../components/Button';
 import { Trash2, Edit, UserPlus, Shield, User as UserIcon } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
-  const [users, setUsers] = useState<User[]>(dataService.getUsers());
+  const [users, setUsers] = useState<User[]>([]);
+  const [sectors, setSectors] = useState<Sector[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<Partial<User>>({});
 
-  const sectors = dataService.getSectors();
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [usersData, sectorsData] = await Promise.all([
+          dataService.getUsers(),
+          dataService.getSectors()
+        ]);
+        setUsers(usersData);
+        setSectors(sectorsData);
+      } catch (error) {
+        console.error('Erro ao carregar dados:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadData();
+  }, []);
 
-  const refreshUsers = () => {
-    setUsers([...dataService.getUsers()]);
+  const refreshUsers = async () => {
+    const usersData = await dataService.getUsers();
+    setUsers(usersData);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editingUser.name || !editingUser.email || !editingUser.role) return;
 
     if (editingUser.id) {
-      dataService.updateUser(editingUser as User);
+      await dataService.updateUser(editingUser as User);
     } else {
-      dataService.addUser(editingUser as Omit<User, 'id' | 'avatarInitials'>);
+      await dataService.addUser(editingUser as Omit<User, 'id' | 'avatarInitials'>);
     }
     
     setIsModalOpen(false);
     setEditingUser({});
-    refreshUsers();
+    await refreshUsers();
   };
 
   const handleEdit = (user: User) => {
@@ -34,10 +54,10 @@ export const UserManagementPage: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Tem certeza que deseja remover este usuário?')) {
-      dataService.deleteUser(id);
-      refreshUsers();
+      await dataService.deleteUser(id);
+      await refreshUsers();
     }
   };
 
@@ -45,6 +65,17 @@ export const UserManagementPage: React.FC = () => {
     setEditingUser({ role: 'leader' }); // Default role
     setIsModalOpen(true);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
+          <p className="text-zinc-500 dark:text-zinc-400">Carregando usuários...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">

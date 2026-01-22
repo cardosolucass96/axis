@@ -28,6 +28,36 @@ export class KpiEntryService {
         return await this.entryRepository.findByFilters(sectorId, month, week);
     }
 
+    // Alias para compatibilidade com as rotas
+    async findByFilters(filters: {
+        sectorId?: number;
+        month?: string;
+        week?: string;
+        kpiId?: number;
+    }): Promise<KpiEntry[]> {
+        return await this.entryRepository.findByFilters(
+            filters.sectorId?.toString(),
+            filters.month,
+            filters.week
+        );
+    }
+
+    async findById(id: number): Promise<KpiEntry | null> {
+        return await this.entryRepository.findById(id.toString());
+    }
+
+    async create(data: any): Promise<KpiEntry> {
+        return await this.createEntry(data);
+    }
+
+    async update(id: number, data: any): Promise<KpiEntry | null> {
+        return await this.updateEntry(id.toString(), data);
+    }
+
+    async delete(id: number): Promise<boolean> {
+        return await this.deleteEntry(id.toString());
+    }
+
     async createEntry(data: {
         sectorId: string;
         kpiId: string;
