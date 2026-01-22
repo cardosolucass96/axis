@@ -5,31 +5,32 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 1: Setup e Configuração Inicial
+## Etapa 1: Setup e Configuração Inicial ✅ COMPLETA
 
 ### 1.1 - Configurar Banco de Dados e Migrações
 - **Objetivo**: Estabelecer conexão e estrutura de dados robusta
 - **Tarefas**:
-  - [ ] Configurar DataSource do TypeORM com SQLite
-  - [ ] Criar migrations para versionamento do banco
-  - [ ] Implementar seed script com dados iniciais (setores, KPIs, usuários)
-  - [ ] Testar conexão e logging
+  - [x] Configurar DataSource do TypeORM com SQLite
+  - [x] Criar migrations para versionamento do banco
+  - [x] Implementar seed script com dados iniciais (setores, KPIs, usuários)
+  - [x] Testar conexão e logging
 
 **Tempo estimado**: 2-3 horas
+**Status**: ✅ CONCLUÍDO - Servidor rodando em http://localhost:3000
 
 ---
 
-## Etapa 2: Desenvolvimento de Entidades (Models)
+## Etapa 2: Desenvolvimento de Entidades (Models) ✅ COMPLETA
 
 ### 2.1 - Criar Entidades Base
 - **Objetivo**: Definir estrutura de dados do banco
 - **Tarefas**:
-  - [ ] Entidade `User` (melhorar: adicionar role, sectorId, avatar)
-  - [ ] Entidade `Sector` (id, name)
-  - [ ] Entidade `KPI` (id, name, unit, format, sectorId FK)
-  - [ ] Entidade `KpiEntry` (dados mensais/semanais: target, realized, gap, gapPercentage)
-  - [ ] Entidade `ActionPlan` (5W2H: what, why, where, who, when, how, howMuch, status)
-  - [ ] Entidade `RootCause` (causas do 5 Por Quês - relacionada a KpiEntry)
+  - [x] Entidade `User` (melhorar: adicionar role, sectorId, avatar)
+  - [x] Entidade `Sector` (id, name)
+  - [x] Entidade `KPI` (id, name, unit, format, sectorId FK)
+  - [x] Entidade `KpiEntry` (dados mensais/semanais: target, realized, gap, gapPercentage)
+  - [x] Entidade `ActionPlan` (5W2H: what, why, where, who, when, how, howMuch, status)
+  - [x] Entidade `RootCause` (causas do 5 Por Quês - relacionada a KpiEntry)
 
 **Relacionamentos**:
 - Sector 1→N KPI
@@ -39,6 +40,7 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 - KpiEntry 1→N RootCause
 
 **Tempo estimado**: 3-4 horas
+**Status**: ✅ CONCLUÍDO - Todas as entidades criadas com relacionamentos e seed executado com sucesso
 
 ---
 
