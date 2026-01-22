@@ -21,6 +21,15 @@ let lastFetchTime = {
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
 
 /**
+ * Verifica se uma string é um UUID v4 válido
+ */
+function isUUID(id: string | undefined): boolean {
+  if (!id) return false;
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(id);
+}
+
+/**
  * Verifica se cache é válido
  */
 function isCacheValid(key: keyof typeof lastFetchTime): boolean {
@@ -48,24 +57,29 @@ export const dataService = {
 
   saveSector: async (sector: Sector): Promise<Sector> => {
     try {
-      const result = sector.id
-        ? await api.sectors.update(sector.id, sector)
-        : await api.sectors.create({ name: sector.name });
+      // Se não for UUID, é um setor novo criado no frontend
+      const isNew = !isUUID(sector.id);
 
-      // Invalidar cache
-      cachedSectors = null;
-
-      return result;
+      if (isNew) {
+        // Para criar novo setor, enviamos apenas o nome (o backend gera o UUID)
+        const result = await api.sectors.create({ name: sector.name });
+        return result;
+      } else {
+        // Para atualização, enviamos o objeto completo (ou parcial)
+        return await api.sectors.update(sector.id, sector);
+      }
     } catch (error) {
       console.error('Erro ao salvar setor:', error);
       throw error;
+    } finally {
+      // Sempre invalidar o cache após uma alteração
+      cachedSectors = null;
     }
   },
 
   deleteSector: async (sectorId: string): Promise<void> => {
     try {
       await api.sectors.delete(sectorId);
-      // Invalidar cache
       cachedSectors = null;
     } catch (error) {
       console.error('Erro ao deletar setor:', error);
@@ -76,16 +90,22 @@ export const dataService = {
   // ===== KPIs =====
   saveKPI: async (sectorId: string, kpi: KPI): Promise<void> => {
     try {
-      if (kpi.id) {
-        await api.kpis.update(kpi.id, kpi);
+      // Se não for UUID, é um KPI novo
+      const isNew = !isUUID(kpi.id);
+
+      if (isNew) {
+        // Para criar, o backend não deve receber um ID do cliente
+        const { id, ...kpiData } = kpi;
+        await api.kpis.create(sectorId, kpiData as any);
       } else {
-        await api.kpis.create(sectorId, kpi);
+        // Update usa o ID existente
+        await api.kpis.update(kpi.id, kpi);
       }
-      // Invalidar cache
-      cachedSectors = null;
     } catch (error) {
       console.error('Erro ao salvar KPI:', error);
       throw error;
+    } finally {
+      cachedSectors = null;
     }
   },
 
@@ -107,14 +127,33 @@ export const dataService = {
         return cachedEntries;
       }
 
-      const entries = await api.entries.getAll({ sectorId, month });
+      const response = await api.entries.getAll({ sectorId, month });
+
+      // Mapear dados do backend para o formato esperado pelo frontend
+      const mappedEntries = response.map((entry: any) => {
+        // Garantir que sectorId e kpiId sejam strings para o frontend
+        const sId = typeof entry.sectorId === 'object' ? entry.sectorId?.id : entry.sectorId;
+        const kId = typeof entry.kpiId === 'object' ? entry.kpiId?.id : entry.kpiId;
+
+        return {
+          ...entry,
+          sectorId: sId || entry.sector?.id,
+          kpiId: kId || entry.kpi?.id,
+          // Converte objetos RootCause para array de strings
+          causes: entry.rootCauses ? entry.rootCauses.map((rc: any) => rc.cause) : (entry.causes || []),
+          // Garante que campos de ActionPlan existam para exibição
+          actionPlan: entry.actionPlan || { what: '', who: '', when: '', why: '', where: '', how: '', howMuch: '' },
+          // Mapeia o status do plano para o campo de controle do frontend
+          actionPlanStatus: entry.actionPlan?.status || entry.actionPlanStatus || 'a_fazer'
+        };
+      });
 
       if (!sectorId && !month) {
-        cachedEntries = entries;
+        cachedEntries = mappedEntries;
         lastFetchTime.entries = Date.now();
       }
 
-      return entries;
+      return mappedEntries;
     } catch (error) {
       console.error('Erro ao buscar entradas:', error);
       return cachedEntries || [];
@@ -123,8 +162,33 @@ export const dataService = {
 
   getAllActionPlans: async (): Promise<IKpiEntry[]> => {
     try {
-      const plans = await api.actionPlans.getAll();
-      return plans.filter(p => p.what && p.what.length > 0);
+      const response = await api.actionPlans.getAll();
+
+      // Mapear objetos ActionPlan do backend para o formato KpiEntry do frontend
+      return response.map((plan: any) => {
+        const entry = plan.entry || {};
+        return {
+          ...entry,
+          // O ID aqui DEVE ser o entryId para que o saveEntry funcione na rota /api/entries/:id
+          id: plan.entryId,
+          sectorId: entry.sectorId,
+          kpiId: entry.kpiId,
+          month: entry.month,
+          week: entry.week,
+          // Mapear campos do 5W2H
+          actionPlan: {
+            what: plan.what,
+            why: plan.why,
+            where: plan.where,
+            who: plan.who,
+            when: plan.when,
+            how: plan.how,
+            howMuch: plan.howMuch
+          },
+          actionPlanStatus: plan.status || 'a_fazer',
+          lastUpdated: entry.lastUpdated || plan.updatedAt
+        };
+      }).filter((p: any) => p.actionPlan?.what && p.actionPlan.what.length > 0);
     } catch (error) {
       console.error('Erro ao buscar planos de ação:', error);
       return [];
@@ -133,17 +197,28 @@ export const dataService = {
 
   saveEntry: async (entry: IKpiEntry): Promise<IKpiEntry> => {
     try {
-      const result = entry.id
-        ? await api.entries.update(entry.id, entry)
-        : await api.entries.create(entry);
+      // Lógica de "New Entry" baseada na validade do UUID
+      // Se for um ID composto (ex: "sector-kpi-month-week"), não é um UUID
+      const isNewEntry = !isUUID(entry.id);
 
-      // Invalidar cache
-      cachedEntries = null;
+      let result;
+      if (isNewEntry) {
+        // Ao enviar um novo recurso via POST, não enviamos o ID gerado pelo cliente
+        // O backend é o dono da verdade para IDs permanentes (Single Source of Truth)
+        const { id, ...entryData } = entry;
+        result = await api.entries.create(entryData);
+      } else {
+        // Para PUT, o ID é obrigatório para identificar o recurso
+        result = await api.entries.update(entry.id, entry);
+      }
 
       return result;
     } catch (error) {
       console.error('Erro ao salvar entrada:', error);
       throw error;
+    } finally {
+      // Invalidar cache para forçar recarregamento na próxima listagem
+      cachedEntries = null;
     }
   },
 

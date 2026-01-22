@@ -65,23 +65,22 @@ export const StructureManagementPage: React.FC = () => {
   const handleSaveSector = async () => {
     if (!editingSector.name) return;
 
-    const id = editingSector.id || Math.random().toString(36).substr(2, 9);
     const newSector: Sector = {
-      id,
+      id: editingSector.id || '', // Deixar vazio se for novo
       name: editingSector.name,
       kpis: editingSector.kpis || []
     };
 
     try {
       // 1. Save the Sector
-      await dataService.saveSector(newSector);
+      const savedSector = await dataService.saveSector(newSector);
 
       // 2. Handle Leader Linking
-      if (selectedLeaderId) {
+      if (selectedLeaderId && savedSector.id) {
         const userToLink = users.find(u => u.id === selectedLeaderId);
         if (userToLink) {
           // Update user to point to this new/edited sector
-          const updatedUser = { ...userToLink, sectorId: id };
+          const updatedUser = { ...userToLink, sectorId: savedSector.id };
           await dataService.updateUser(updatedUser);
         }
       }
@@ -120,9 +119,8 @@ export const StructureManagementPage: React.FC = () => {
   const handleSaveKPI = async () => {
     if (!activeSectorIdForKPI || !editingKPI.name) return;
 
-    const id = editingKPI.id || `kpi_${Math.random().toString(36).substr(2, 6)}`;
     const newKPI: KPI = {
-      id,
+      id: editingKPI.id || '', // Deixar vazio se for novo
       name: editingKPI.name,
       unit: editingKPI.unit || 'number',
       format: editingKPI.format || ''

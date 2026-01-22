@@ -82,4 +82,39 @@ export class ActionPlanService {
 
         return await this.planRepository.delete(id);
     }
+
+    // ===== Métodos alias para compatibilidade com as rotas =====
+
+    async findByFilters(filters: { status?: string; sectorId?: string; month?: string }): Promise<ActionPlan[]> {
+        // Por enquanto, retornar todos e filtrar no código
+        // TODO: Implementar filtros no repository
+        const allPlans = await this.planRepository.findAll();
+
+        return allPlans.filter(plan => {
+            if (filters.status && plan.status !== filters.status) return false;
+            // Note: ActionPlan não tem sectorId ou month diretamente
+            // Esses filtros precisariam ser implementados via JOIN com Entry
+            return true;
+        });
+    }
+
+    async findById(id: string): Promise<ActionPlan | null> {
+        return await this.getPlanById(id);
+    }
+
+    async create(data: any): Promise<ActionPlan> {
+        return await this.createPlan(data);
+    }
+
+    async update(id: string, data: any): Promise<ActionPlan | null> {
+        return await this.updatePlan(id, data);
+    }
+
+    async delete(id: string): Promise<boolean> {
+        return await this.deletePlan(id);
+    }
+
+    async updateStatus(id: string, status: string): Promise<ActionPlan | null> {
+        return await this.updatePlanStatus(id, status as any);
+    }
 }

@@ -3,7 +3,8 @@
  * Configuração centralizada de requisições
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+// Fallback para a URL da API
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000/api";
 
 interface ApiResponse<T> {
     data: T;
@@ -51,12 +52,12 @@ async function request<T>(
 
     const requestInit: RequestInit = {
         method,
-        headers: {
-            "Content-Type": "application/json",
-        },
+        headers: {} as Record<string, string>,
     };
 
+    // Apenas adicionar Content-Type se houver body
     if (options?.body) {
+        (requestInit.headers as Record<string, string>)["Content-Type"] = "application/json";
         requestInit.body = JSON.stringify(options.body);
     }
 

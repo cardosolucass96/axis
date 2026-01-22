@@ -17,7 +17,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
 
       const filters: any = {};
       if (status) filters.status = status;
-      if (sectorId) filters.sectorId = parseInt(sectorId);
+      if (sectorId) filters.sectorId = sectorId;
       if (month) filters.month = month;
 
       const plans = await actionPlanService.findByFilters(filters);
@@ -34,7 +34,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
   fastify.get("/api/action-plans/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const plan = await actionPlanService.findById(parseInt(id));
+      const plan = await actionPlanService.findById(id);
 
       if (!plan) {
         return reply.status(404).send({
@@ -57,9 +57,9 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     try {
       const { entryId } = request.params as { entryId: string };
       const planData = {
-        ...request.body,
-        entryId: parseInt(entryId),
-      } as any;
+        ...(request.body as any),
+        entryId: entryId,
+      };
 
       const plan = await actionPlanService.create(planData);
       return reply.status(201).send({ status: "success", data: plan });
@@ -76,7 +76,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const planData = request.body as any;
-      const plan = await actionPlanService.update(parseInt(id), planData);
+      const plan = await actionPlanService.update(id, planData);
 
       if (!plan) {
         return reply.status(404).send({
@@ -100,7 +100,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
       const { id } = request.params as { id: string };
       const { status } = request.body as { status: string };
 
-      const plan = await actionPlanService.updateStatus(parseInt(id), status);
+      const plan = await actionPlanService.updateStatus(id, status);
 
       if (!plan) {
         return reply.status(404).send({
@@ -122,7 +122,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/action-plans/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const success = await actionPlanService.delete(parseInt(id));
+      const success = await actionPlanService.delete(id);
 
       if (!success) {
         return reply.status(404).send({
@@ -147,7 +147,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
   fastify.get("/api/entries/:entryId/causes", async (request, reply) => {
     try {
       const { entryId } = request.params as { entryId: string };
-      const causes = await rootCauseRepository.findByEntryId(parseInt(entryId));
+      const causes = await rootCauseRepository.findByEntryId(entryId);
       return reply.send({ status: "success", data: causes });
     } catch (error: any) {
       return reply.status(500).send({
@@ -162,9 +162,9 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     try {
       const { entryId } = request.params as { entryId: string };
       const causeData = {
-        ...request.body,
-        entryId: parseInt(entryId),
-      } as any;
+        ...(request.body as any),
+        entryId: entryId,
+      };
 
       const cause = await rootCauseRepository.create(causeData);
       return reply.status(201).send({ status: "success", data: cause });
@@ -181,7 +181,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const causeData = request.body as any;
-      const cause = await rootCauseRepository.update(parseInt(id), causeData);
+      const cause = await rootCauseRepository.update(id, causeData);
 
       if (!cause) {
         return reply.status(404).send({
@@ -203,7 +203,7 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/causes/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const success = await rootCauseRepository.delete(parseInt(id));
+      const success = await rootCauseRepository.delete(id);
 
       if (!success) {
         return reply.status(404).send({

@@ -30,75 +30,117 @@ export class KpiEntryService {
 
     // Alias para compatibilidade com as rotas
     async findByFilters(filters: {
-        sectorId?: number;
+        sectorId?: string;
         month?: string;
         week?: string;
-        kpiId?: number;
+        kpiId?: string;
     }): Promise<KpiEntry[]> {
         return await this.entryRepository.findByFilters(
-            filters.sectorId?.toString(),
+            filters.sectorId,
             filters.month,
             filters.week
         );
     }
 
-    async findById(id: number): Promise<KpiEntry | null> {
-        return await this.entryRepository.findById(id.toString());
+    async findById(id: string): Promise<KpiEntry | null> {
+        return await this.entryRepository.findById(id);
     }
 
     async create(data: any): Promise<KpiEntry> {
         return await this.createEntry(data);
     }
 
-    async update(id: number, data: any): Promise<KpiEntry | null> {
-        return await this.updateEntry(id.toString(), data);
+    async update(id: string, data: any): Promise<KpiEntry | null> {
+        return await this.updateEntry(id, data);
     }
 
-    async delete(id: number): Promise<boolean> {
-        return await this.deleteEntry(id.toString());
+    async delete(id: string): Promise<boolean> {
+        return await this.deleteEntry(id);
     }
 
-    async createEntry(data: {
-        sectorId: string;
-        kpiId: string;
-        month: string;
-        week: string;
-        target: number;
-        realized: number;
-    }): Promise<KpiEntry> {
+    async createEntry(data: any): Promise<KpiEntry> {
         // Verify KPI exists
         const kpi = await this.kpiRepository.findById(data.kpiId);
         if (!kpi) {
             throw new Error("KPI não encontrado");
         }
 
-        // Calculate gap and gapPercentage
-        const gap = data.realized - data.target;
-        const gapPercentage = (data.realized / data.target) * 100;
+        const entryData: any = { ...data };
 
-        return await this.entryRepository.create({
-            ...data,
-            gap,
-            gapPercentage,
-        });
+        // Mapear 'causes' para 'rootCauses'
+        if (data.causes && Array.isArray(data.causes)) {
+            entryData.rootCauses = data.causes.map((cause: string, index: number) => ({
+                cause,
+                order: index
+            }));
+            delete entryData.causes;
+        }
+
+        // Se houver actionPlanStatus, podemos inicializar o actionPlan com esse status
+        if (data.actionPlanStatus && !data.actionPlan) {
+            entryData.actionPlan = { status: data.actionPlanStatus };
+        } else if (data.actionPlanStatus && data.actionPlan) {
+            entryData.actionPlan = { ...data.actionPlan, status: data.actionPlanStatus };
+        }
+
+        // Calcular GAP
+        const target = parseFloat(data.target || 0);
+        const realized = parseFloat(data.realized || 0);
+        entryData.gap = realized - target;
+        entryData.gapPercentage = target !== 0 ? (realized / target) * 100 : 0;
+        entryData.target = target;
+        entryData.realized = realized;
+
+        return await this.entryRepository.create(entryData);
     }
 
     async updateEntry(
         id: string,
-        data: Partial<KpiEntry>
+        data: any
     ): Promise<KpiEntry | null> {
+        console.log(`[SERVICE] Buscando entry no banco: ${id}`);
         const entry = await this.entryRepository.findById(id);
+
         if (!entry) {
+            console.error(`[SERVICE] Entry não encontrada: ${id}`);
             throw new Error("Entrada de KPI não encontrada");
         }
 
-        // Recalculate gap if realized or target changed
-        const updateData = { ...data };
+        const updateData: any = { ...data };
+        // Evitar que o campo id no body conflite com o id do path
+        delete updateData.id;
+
+        // Mapear 'causes' (frontend strings) para 'rootCauses' (backend entities)
+        if (data.causes && Array.isArray(data.causes)) {
+            updateData.rootCauses = data.causes.map((cause: string, index: number) => ({
+                cause,
+                order: index,
+                entryId: id
+            }));
+            delete updateData.causes;
+        }
+
+        // Recalcular GAP se necessário
         if (data.realized !== undefined || data.target !== undefined) {
-            const realized = data.realized ?? entry.realized;
-            const target = data.target ?? entry.target;
+            const realized = parseFloat(String(data.realized ?? entry.realized));
+            const target = parseFloat(String(data.target ?? entry.target));
             updateData.gap = realized - target;
-            updateData.gapPercentage = (realized / target) * 100;
+            updateData.gapPercentage = target !== 0 ? (realized / target) * 100 : 0;
+            updateData.realized = realized;
+            updateData.target = target;
+        }
+
+        // Mapear status do plano de ação enviado de forma plana pelo frontend
+        if (data.actionPlanStatus) {
+            if (updateData.actionPlan) {
+                updateData.actionPlan.status = data.actionPlanStatus;
+            } else if (entry.actionPlan) {
+                // Se o actionPlan já existe no banco mas não veio no updateData
+                updateData.actionPlan = { ...entry.actionPlan, status: data.actionPlanStatus };
+            } else {
+                // Se não existe, cria um objeto básico para o cascade save
+                updateData.actionPlan = { status: data.actionPlanStatus };
+            }
         }
 
         return await this.entryRepository.update(id, updateData);

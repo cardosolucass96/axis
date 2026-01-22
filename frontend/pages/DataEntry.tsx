@@ -126,7 +126,14 @@ export const DataEntryPage: React.FC = () => {
     setSavingStates(prev => ({ ...prev, [kpiId]: true }));
 
     try {
-      await dataService.saveEntry(entry);
+      const savedEntry = await dataService.saveEntry(entry);
+
+      // Atualizar o estado local com a entry salva (contendo o ID real do banco)
+      setEntries(prev => ({
+        ...prev,
+        [kpiId]: savedEntry
+      }));
+
       setSavingStates(prev => ({ ...prev, [kpiId]: false }));
       setSuccessStates(prev => ({ ...prev, [kpiId]: true }));
       setTimeout(() => {

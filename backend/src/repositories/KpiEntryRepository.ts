@@ -64,8 +64,17 @@ export class KpiEntryRepository {
     }
 
     async update(id: string, entry: Partial<KpiEntry>): Promise<KpiEntry | null> {
-        await this.repository.update(id, entry);
-        return await this.findById(id);
+        const existing = await this.findById(id);
+        if (!existing) return null;
+
+        // Se houver actionPlanStatus no body (vindo do frontend legado), 
+        // mapear para actionPlan.status se o actionPlan existir
+        if ((entry as any).actionPlanStatus && existing.actionPlan) {
+            existing.actionPlan.status = (entry as any).actionPlanStatus;
+        }
+
+        const merged = this.repository.merge(existing, entry);
+        return await this.repository.save(merged);
     }
 
     async delete(id: string): Promise<boolean> {

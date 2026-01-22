@@ -15,10 +15,10 @@ export async function entryRoutes(fastify: FastifyInstance) {
       };
 
       const filters: any = {};
-      if (sectorId) filters.sectorId = parseInt(sectorId);
+      if (sectorId) filters.sectorId = sectorId;
       if (month) filters.month = month;
       if (week) filters.week = week;
-      if (kpiId) filters.kpiId = parseInt(kpiId);
+      if (kpiId) filters.kpiId = kpiId;
 
       const entries = await kpiEntryService.findByFilters(filters);
       return reply.send({ status: "success", data: entries });
@@ -34,7 +34,7 @@ export async function entryRoutes(fastify: FastifyInstance) {
   fastify.get("/api/entries/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const entry = await kpiEntryService.findById(parseInt(id));
+      const entry = await kpiEntryService.findById(id);
 
       if (!entry) {
         return reply.status(404).send({
@@ -71,7 +71,10 @@ export async function entryRoutes(fastify: FastifyInstance) {
     try {
       const { id } = request.params as { id: string };
       const entryData = request.body as any;
-      const entry = await kpiEntryService.update(parseInt(id), entryData);
+
+      console.log(`[BACKEND] Tentando atualizar entry ID: ${id}`);
+
+      const entry = await kpiEntryService.update(id, entryData);
 
       if (!entry) {
         return reply.status(404).send({
@@ -93,7 +96,7 @@ export async function entryRoutes(fastify: FastifyInstance) {
   fastify.delete("/api/entries/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
-      const success = await kpiEntryService.delete(parseInt(id));
+      const success = await kpiEntryService.delete(id);
 
       if (!success) {
         return reply.status(404).send({
@@ -123,7 +126,7 @@ export async function entryRoutes(fastify: FastifyInstance) {
         week?: string;
       };
 
-      const filters: any = { sectorId: parseInt(sectorId) };
+      const filters: any = { sectorId };
       if (month) filters.month = month;
       if (week) filters.week = week;
 

@@ -17,7 +17,7 @@ const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",")
-    : ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
+    : ["http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:5173", "http://127.0.0.1:3001"];
 
 const fastify = Fastify({
     logger: process.env.NODE_ENV === "development"
@@ -27,6 +27,7 @@ const fastify = Fastify({
 fastify.register(cors, {
     origin: CORS_ORIGIN,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 });
 
 // --- Rota de Health Check ---
