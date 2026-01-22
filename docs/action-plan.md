@@ -75,30 +75,30 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 **Objetivo**: Refatorar o frontend para consumir APIs reais do backend de forma incremental, em paralelo com o desenvolvimento
 
-### 3.5.1 - Configuração do Cliente HTTP
+### 3.5.1 - Configuração do Cliente HTTP ✅ COMPLETA
 - **Objetivo**: Criar cliente HTTP para comunicação com backend
 - **Tarefas**:
-  - [ ] Criar arquivo `src/services/api.ts` com configuração do fetch/axios
-  - [ ] Configurar base URL (http://localhost:3000/api)
-  - [ ] Implementar interceptadores para tratamento de erros
+  - [x] Criar arquivo `src/services/api.ts` com configuração do fetch/axios
+  - [x] Configurar base URL (http://localhost:3000/api)
+  - [x] Implementar interceptadores para tratamento de erros
 
-### 3.5.2 - Refatorar DataService para Chamar Backend
+### 3.5.2 - Refatorar DataService para Chamar Backend ✅ COMPLETA
 - **Objetivo**: Substituir dados mockados por chamadas HTTP
 - **Tarefas**:
-  - [ ] Criar métodos que chamam `GET /api/users`
-  - [ ] Criar métodos que chamam `GET /api/sectors`
-  - [ ] Implementar cache local para reduzir requests (opcional)
-  - [ ] Adicionar loading states durante requisições
-  - [ ] Implementar tratamento de erros com feedback ao usuário
+  - [x] Criar métodos que chamam `GET /api/users`
+  - [x] Criar métodos que chamam `GET /api/sectors`
+  - [x] Implementar cache local para reduzir requests (opcional)
+  - [x] Adicionar loading states durante requisições
+  - [x] Implementar tratamento de erros com feedback ao usuário
 
-### 3.5.3 - Atualizar Estrutura do Frontend
+### 3.5.3 - Atualizar Estrutura do Frontend ✅ COMPLETA
 - **Objetivo**: Preparar o frontend para dados dinâmicos
 - **Tarefas**:
-  - [ ] Remover INITIAL_ENTRIES do constants.ts (usar apenas dados do backend)
-  - [ ] Remover SECTORS do constants.ts (usar dados do backend)
-  - [ ] Adicionar contexto para loading states em `ThemeContext` ou criar `LoadingContext`
-  - [ ] Adicionar tratamento de erro genérico
-  - [ ] Adicionar função de retry para requisições falhadas
+  - [x] Remover INITIAL_ENTRIES do constants.ts (usar apenas dados do backend)
+  - [x] Remover SECTORS do constants.ts (usar dados do backend)
+  - [x] Adicionar contexto para loading states em `ThemeContext` ou criar `LoadingContext`
+  - [x] Adicionar tratamento de erro genérico
+  - [x] Adicionar função de retry para requisições falhadas
 
 ### 3.5.4 - Testar Integração por Página
 - **Objetivo**: Validar funcionamento de cada página com dados reais
@@ -112,17 +112,17 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 **Tempo estimado**: 2 horas iniciais + 1 hora por teste incremental
 **Status**: ⏳ PRÓXIMA ETAPA
 
-## Etapa 4: Rotas de Autenticação e Usuários
+## Etapa 4: Rotas de Autenticação e Usuários ✅ COMPLETA (Parte 4.1)
 
-### 4.1 - Endpoints de Usuários
+### 4.1 - Endpoints de Usuários ✅ COMPLETA
 - **Objetivo**: Gerenciar usuários da plataforma
 - **Endpoints**:
-  - [ ] `GET /api/users` - Listar todos os usuários
-  - [ ] `GET /api/users/:id` - Obter detalhes de um usuário
-  - [ ] `POST /api/users` - Criar novo usuário
-  - [ ] `PUT /api/users/:id` - Atualizar usuário
-  - [ ] `DELETE /api/users/:id` - Deletar usuário
-  - [ ] `POST /api/users/:id/link-sector` - Vincular líder a um setor
+  - [x] `GET /api/users` - Listar todos os usuários
+  - [x] `GET /api/users/:id` - Obter detalhes de um usuário
+  - [x] `POST /api/users` - Criar novo usuário
+  - [x] `PUT /api/users/:id` - Atualizar usuário
+  - [x] `DELETE /api/users/:id` - Deletar usuário
+  - [x] `POST /api/users/:userId/link-sector` - Vincular líder a um setor
 
 ### 4.2 - Autenticação Básica (Simples)
 - **Objetivo**: Implementar autenticação simples para MVP
@@ -136,77 +136,80 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 5: Rotas de Estrutura (Setores e KPIs)
+## Etapa 5: Rotas de Estrutura (Setores e KPIs) ✅ COMPLETA
 
-### 5.1 - Endpoints de Setores
+### 5.1 - Endpoints de Setores ✅ COMPLETA
 - **Objetivo**: Gerenciar setores e sua estrutura
 - **Endpoints**:
-  - [ ] `GET /api/sectors` - Listar todos os setores
-  - [ ] `GET /api/sectors/:id` - Obter detalhes de um setor com seus KPIs
-  - [ ] `POST /api/sectors` - Criar novo setor
-  - [ ] `PUT /api/sectors/:id` - Atualizar setor
-  - [ ] `DELETE /api/sectors/:id` - Deletar setor (cascade KPIs)
+  - [x] `GET /api/sectors` - Listar todos os setores
+  - [x] `GET /api/sectors/:id` - Obter detalhes de um setor com seus KPIs
+  - [x] `POST /api/sectors` - Criar novo setor
+  - [x] `PUT /api/sectors/:id` - Atualizar setor
+  - [x] `DELETE /api/sectors/:id` - Deletar setor (cascade KPIs)
 
-### 5.2 - Endpoints de KPIs
+### 5.2 - Endpoints de KPIs ✅ COMPLETA
 - **Objetivo**: Gerenciar KPIs dentro de setores
 - **Endpoints**:
-  - [ ] `GET /api/sectors/:sectorId/kpis` - Listar KPIs de um setor
-  - [ ] `GET /api/kpis/:id` - Obter detalhes de um KPI
-  - [ ] `POST /api/sectors/:sectorId/kpis` - Criar novo KPI
-  - [ ] `PUT /api/kpis/:id` - Atualizar KPI
-  - [ ] `DELETE /api/kpis/:id` - Deletar KPI
+  - [x] `GET /api/sectors/:sectorId/kpis` - Listar KPIs de um setor
+  - [x] `GET /api/kpis/:id` - Obter detalhes de um KPI
+  - [x] `POST /api/sectors/:sectorId/kpis` - Criar novo KPI
+  - [x] `PUT /api/kpis/:id` - Atualizar KPI
+  - [x] `DELETE /api/kpis/:id` - Deletar KPI
 
 **Tempo estimado**: 3-4 horas
+**Status**: ✅ CONCLUÍDO
 
 ---
 
-## Etapa 6: Rotas de Dados de KPI (KpiEntry)
+## Etapa 6: Rotas de Dados de KPI (KpiEntry) ✅ COMPLETA
 
-### 6.1 - Endpoints de Entradas de KPI
+### 6.1 - Endpoints de Entradas de KPI ✅ COMPLETA
 - **Objetivo**: Gerenciar dados mensais/semanais de KPIs
 - **Endpoints**:
-  - [ ] `GET /api/entries` - Listar todas as entradas (com filtros: sectorId, month, week)
-  - [ ] `GET /api/entries/:id` - Obter detalhes de uma entrada
-  - [ ] `POST /api/entries` - Criar nova entrada
-  - [ ] `PUT /api/entries/:id` - Atualizar entrada (target, realized, causes)
-  - [ ] `DELETE /api/entries/:id` - Deletar entrada
-  - [ ] `GET /api/sectors/:sectorId/entries` - Listar entradas de um setor
-  - [ ] `GET /api/sectors/:sectorId/entries?month=...&week=...` - Filtros avançados
+  - [x] `GET /api/entries` - Listar todas as entradas (com filtros: sectorId, month, week)
+  - [x] `GET /api/entries/:id` - Obter detalhes de uma entrada
+  - [x] `POST /api/entries` - Criar nova entrada
+  - [x] `PUT /api/entries/:id` - Atualizar entrada (target, realized, causes)
+  - [x] `DELETE /api/entries/:id` - Deletar entrada
+  - [x] `GET /api/sectors/:sectorId/entries` - Listar entradas de um setor
+  - [x] `GET /api/sectors/:sectorId/entries?month=...&week=...` - Filtros avançados
 
-### 6.2 - Validações e Cálculos
+### 6.2 - Validações e Cálculos ✅ COMPLETA
 - **Objetivo**: Garantir integridade dos dados
 - **Tarefas**:
-  - [ ] Validar valores numéricos (target, realized)
-  - [ ] Calcular automaticamente `gap = realized - target`
-  - [ ] Calcular automaticamente `gapPercentage = (realized / target) * 100`
-  - [ ] Validar que KPI existe antes de criar entry
-  - [ ] Validar que setor existe antes de criar entry
+  - [x] Validar valores numéricos (target, realized)
+  - [x] Calcular automaticamente `gap = realized - target`
+  - [x] Calcular automaticamente `gapPercentage = (realized / target) * 100`
+  - [x] Validar que KPI existe antes de criar entry
+  - [x] Validar que setor existe antes de criar entry
 
 **Tempo estimado**: 3-4 horas
+**Status**: ✅ CONCLUÍDO
 
 ---
 
-## Etapa 7: Rotas de Planos de Ação (5W2H)
+## Etapa 7: Rotas de Planos de Ação (5W2H) ✅ COMPLETA
 
-### 7.1 - Endpoints de Planos de Ação
+### 7.1 - Endpoints de Planos de Ação ✅ COMPLETA
 - **Objetivo**: Gerenciar planos de ação e status
 - **Endpoints**:
-  - [ ] `GET /api/action-plans` - Listar todos os planos (com filtros: status, sectorId, month)
-  - [ ] `GET /api/action-plans/:id` - Obter detalhes de um plano
-  - [ ] `POST /api/entries/:entryId/action-plans` - Criar plano de ação para uma entry
-  - [ ] `PUT /api/action-plans/:id` - Atualizar plano de ação
-  - [ ] `PATCH /api/action-plans/:id/status` - Mudar status (a_fazer → fazendo → feito / stand_by)
-  - [ ] `DELETE /api/action-plans/:id` - Deletar plano de ação
+  - [x] `GET /api/action-plans` - Listar todos os planos (com filtros: status, sectorId, month)
+  - [x] `GET /api/action-plans/:id` - Obter detalhes de um plano
+  - [x] `POST /api/entries/:entryId/action-plans` - Criar plano de ação para uma entry
+  - [x] `PUT /api/action-plans/:id` - Atualizar plano de ação
+  - [x] `PATCH /api/action-plans/:id/status` - Mudar status (a_fazer → fazendo → feito / stand_by)
+  - [x] `DELETE /api/action-plans/:id` - Deletar plano de ação
 
-### 7.2 - Endpoints de Causas Raiz (5 Porquês)
+### 7.2 - Endpoints de Causas Raiz (5 Porquês) ✅ COMPLETA
 - **Objetivo**: Gerenciar causas associadas a entries
 - **Endpoints**:
-  - [ ] `GET /api/entries/:entryId/causes` - Listar causas de uma entry
-  - [ ] `POST /api/entries/:entryId/causes` - Adicionar causa
-  - [ ] `PUT /api/causes/:id` - Atualizar causa
-  - [ ] `DELETE /api/causes/:id` - Deletar causa
+  - [x] `GET /api/entries/:entryId/causes` - Listar causas de uma entry
+  - [x] `POST /api/entries/:entryId/causes` - Adicionar causa
+  - [x] `PUT /api/causes/:id` - Atualizar causa
+  - [x] `DELETE /api/causes/:id` - Deletar causa
 
 **Tempo estimado**: 3-4 horas
+**Status**: ✅ CONCLUÍDO
 
 ---
 

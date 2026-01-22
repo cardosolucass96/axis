@@ -1,99 +1,164 @@
-import { SECTORS as INITIAL_SECTORS, INITIAL_ENTRIES as SEEDED_ENTRIES } from '../constants';
 import { KpiEntry as IKpiEntry, User, Sector, KPI } from '../types';
+import { api, HttpError } from './api';
 
-// State simulation
-let entries: IKpiEntry[] = [...SEEDED_ENTRIES];
-let sectors: Sector[] = [...INITIAL_SECTORS];
+/**
+ * DataService - Camada de acesso a dados
+ * Comunica com backend via API REST
+ * 
+ * Cache local para reduzir requisições
+ */
 
-// Seed Initial Users
-let users: User[] = [
-  { id: '1', name: 'Roberto (CEO)', email: 'ceo@vorp.com', role: 'admin', avatarInitials: 'RO' },
-  { id: '2', name: 'Fernanda (CoS)', email: 'cos@vorp.com', role: 'admin', avatarInitials: 'FE' },
-  { id: '3', name: 'Allef (Líder)', email: 'allef@vorp.com', role: 'leader', avatarInitials: 'AL', sectorId: 'comercial_allef' },
-  { id: '4', name: 'Lais (Líder)', email: 'lais@vorp.com', role: 'leader', avatarInitials: 'LA', sectorId: 'comercial_lais' },
-  { id: '5', name: 'Sena (Vendas)', email: 'sena@vorp.com', role: 'leader', avatarInitials: 'SE' },
-];
+// Cache local para dados
+let cachedUsers: User[] | null = null;
+let cachedSectors: Sector[] | null = null;
+let cachedEntries: IKpiEntry[] | null = null;
+let lastFetchTime = {
+  users: 0,
+  sectors: 0,
+  entries: 0,
+};
+
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+/**
+ * Verifica se cache é válido
+ */
+function isCacheValid(key: keyof typeof lastFetchTime): boolean {
+  return Date.now() - lastFetchTime[key] < CACHE_DURATION;
+}
 
 export const dataService = {
-  // --- Structure Logic (Sectors & KPIs) ---
-  getSectors: (): Sector[] => {
-    return sectors;
-  },
+  // ===== SECTORS =====
+  getSectors: async (): Promise<Sector[]> => {
+    try {
+      if (cachedSectors && isCacheValid('sectors')) {
+        return cachedSectors;
+      }
 
-  saveSector: (sector: Sector) => {
-    const index = sectors.findIndex(s => s.id === sector.id);
-    if (index >= 0) {
-      sectors[index] = sector;
-    } else {
-      sectors.push(sector);
+      const sectors = await api.sectors.getAll();
+      cachedSectors = sectors;
+      lastFetchTime.sectors = Date.now();
+      return sectors;
+    } catch (error) {
+      console.error('Erro ao buscar setores:', error);
+      // Fallback: retornar cache antigo se houver
+      return cachedSectors || [];
     }
-    return sector;
   },
 
-  deleteSector: (sectorId: string) => {
-    sectors = sectors.filter(s => s.id !== sectorId);
-    // Optional: Clean up orphaned entries/users here if needed
-  },
-
-  saveKPI: (sectorId: string, kpi: KPI) => {
-    const sectorIndex = sectors.findIndex(s => s.id === sectorId);
-    if (sectorIndex >= 0) {
-      const sector = sectors[sectorIndex];
-      const kpiIndex = sector.kpis.findIndex(k => k.id === kpi.id);
+  saveSector: async (sector: Sector): Promise<Sector> => {
+    try {
+      const result = sector.id
+        ? await api.sectors.update(sector.id, sector)
+        : await api.sectors.create({ name: sector.name });
       
-      const newKpis = [...sector.kpis];
-      if (kpiIndex >= 0) {
-        newKpis[kpiIndex] = kpi;
+      // Invalidar cache
+      cachedSectors = null;
+      
+      return result;
+    } catch (error) {
+      console.error('Erro ao salvar setor:', error);
+      throw error;
+    }
+  },
+
+  deleteSector: async (sectorId: string): Promise<void> => {
+    try {
+      await api.sectors.delete(sectorId);
+      // Invalidar cache
+      cachedSectors = null;
+    } catch (error) {
+      console.error('Erro ao deletar setor:', error);
+      throw error;
+    }
+  },
+
+  // ===== KPIs =====
+  saveKPI: async (sectorId: string, kpi: KPI): Promise<void> => {
+    try {
+      if (kpi.id) {
+        await api.kpis.update(kpi.id, kpi);
       } else {
-        newKpis.push(kpi);
+        await api.kpis.create(sectorId, kpi);
+      }
+      // Invalidar cache
+      cachedSectors = null;
+    } catch (error) {
+      console.error('Erro ao salvar KPI:', error);
+      throw error;
+    }
+  },
+
+  deleteKPI: async (sectorId: string, kpiId: string): Promise<void> => {
+    try {
+      await api.kpis.delete(kpiId);
+      // Invalidar cache
+      cachedSectors = null;
+    } catch (error) {
+      console.error('Erro ao deletar KPI:', error);
+      throw error;
+    }
+  },
+
+  // ===== ENTRIES =====
+  getEntries: async (sectorId?: string, month?: string): Promise<IKpiEntry[]> => {
+    try {
+      if (!sectorId && !month && cachedEntries && isCacheValid('entries')) {
+        return cachedEntries;
+      }
+
+      const entries = await api.entries.getAll({ sectorId, month });
+      
+      if (!sectorId && !month) {
+        cachedEntries = entries;
+        lastFetchTime.entries = Date.now();
       }
       
-      sectors[sectorIndex] = { ...sector, kpis: newKpis };
+      return entries;
+    } catch (error) {
+      console.error('Erro ao buscar entradas:', error);
+      return cachedEntries || [];
     }
   },
 
-  deleteKPI: (sectorId: string, kpiId: string) => {
-    const sectorIndex = sectors.findIndex(s => s.id === sectorId);
-    if (sectorIndex >= 0) {
-      const sector = sectors[sectorIndex];
-      const newKpis = sector.kpis.filter(k => k.id !== kpiId);
-      sectors[sectorIndex] = { ...sector, kpis: newKpis };
+  getAllActionPlans: async (): Promise<IKpiEntry[]> => {
+    try {
+      const plans = await api.actionPlans.getAll();
+      return plans.filter(p => p.what && p.what.length > 0);
+    } catch (error) {
+      console.error('Erro ao buscar planos de ação:', error);
+      return [];
     }
   },
 
-  // --- Entries Logic ---
-  getEntries: (sectorId?: string, month?: string): IKpiEntry[] => {
-    let filtered = entries;
-    if (sectorId) filtered = filtered.filter(e => e.sectorId === sectorId);
-    if (month) filtered = filtered.filter(e => e.month === month);
-    return filtered;
-  },
-
-  getAllActionPlans: () => {
-    // Safety check: ensure 'what' exists before accessing length
-    return entries.filter(e => e.actionPlan && e.actionPlan.what && e.actionPlan.what.length > 0);
-  },
-
-  saveEntry: (entry: IKpiEntry) => {
-    const existingIndex = entries.findIndex(e => e.id === entry.id);
-    if (existingIndex >= 0) {
-      entries[existingIndex] = entry;
-    } else {
-      entries.push(entry);
+  saveEntry: async (entry: IKpiEntry): Promise<IKpiEntry> => {
+    try {
+      const result = entry.id
+        ? await api.entries.update(entry.id, entry)
+        : await api.entries.create(entry);
+      
+      // Invalidar cache
+      cachedEntries = null;
+      
+      return result;
+    } catch (error) {
+      console.error('Erro ao salvar entrada:', error);
+      throw error;
     }
-    return entry;
   },
-  
-  removeActionPlan: (entryId: string) => {
-    const existingIndex = entries.findIndex(e => e.id === entryId);
-    if (existingIndex >= 0) {
-      const entry = entries[existingIndex];
-      const updatedEntry: IKpiEntry = {
-        ...entry,
-        actionPlan: undefined,
-        actionPlanStatus: undefined
-      };
-      entries[existingIndex] = updatedEntry;
+
+  removeActionPlan: async (entryId: string): Promise<void> => {
+    try {
+      const plans = await api.actionPlans.getAll();
+      const plan = plans.find(p => p.entryId === entryId);
+      
+      if (plan) {
+        await api.actionPlans.delete(plan.id);
+        cachedEntries = null;
+      }
+    } catch (error) {
+      console.error('Erro ao remover plano de ação:', error);
+      throw error;
     }
   },
 
@@ -101,30 +166,78 @@ export const dataService = {
     return `${sectorId}-${kpiId}-${month}-${week}`.replace(/\s+/g, '').toLowerCase();
   },
 
-  // --- User Logic ---
-  getUsers: (): User[] => {
-    return users;
-  },
+  // ===== USERS =====
+  getUsers: async (): Promise<User[]> => {
+    try {
+      if (cachedUsers && isCacheValid('users')) {
+        return cachedUsers;
+      }
 
-  addUser: (user: Omit<User, 'id' | 'avatarInitials'>) => {
-    const initials = user.name.substring(0, 2).toUpperCase();
-    const newUser: User = {
-      ...user,
-      id: Math.random().toString(36).substr(2, 9),
-      avatarInitials: initials
-    };
-    users.push(newUser);
-    return newUser;
-  },
-
-  updateUser: (user: User) => {
-    const index = users.findIndex(u => u.id === user.id);
-    if (index >= 0) {
-      users[index] = user;
+      const users = await api.users.getAll();
+      cachedUsers = users;
+      lastFetchTime.users = Date.now();
+      return users;
+    } catch (error) {
+      console.error('Erro ao buscar usuários:', error);
+      return cachedUsers || [];
     }
   },
 
-  deleteUser: (userId: string) => {
-    users = users.filter(u => u.id !== userId);
-  }
+  addUser: async (user: Omit<User, 'id' | 'avatarInitials'>): Promise<User> => {
+    try {
+      const result = await api.users.create({
+        ...user,
+        avatarInitials: user.name.substring(0, 2).toUpperCase(),
+      });
+      
+      // Invalidar cache
+      cachedUsers = null;
+      
+      return result;
+    } catch (error) {
+      console.error('Erro ao adicionar usuário:', error);
+      throw error;
+    }
+  },
+
+  updateUser: async (user: User): Promise<void> => {
+    try {
+      await api.users.update(user.id, user);
+      // Invalidar cache
+      cachedUsers = null;
+    } catch (error) {
+      console.error('Erro ao atualizar usuário:', error);
+      throw error;
+    }
+  },
+
+  deleteUser: async (userId: string): Promise<void> => {
+    try {
+      await api.users.delete(userId);
+      // Invalidar cache
+      cachedUsers = null;
+    } catch (error) {
+      console.error('Erro ao deletar usuário:', error);
+      throw error;
+    }
+  },
+
+  // ===== HEALTH CHECK =====
+  checkHealth: async (): Promise<boolean> => {
+    try {
+      await api.health();
+      return true;
+    } catch (error) {
+      console.error('Erro ao conectar com servidor:', error);
+      return false;
+    }
+  },
+
+  // ===== CACHE MANAGEMENT =====
+  invalidateCache: () => {
+    cachedUsers = null;
+    cachedSectors = null;
+    cachedEntries = null;
+    lastFetchTime = { users: 0, sectors: 0, entries: 0 };
+  },
 };

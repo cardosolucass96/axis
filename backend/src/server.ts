@@ -1,14 +1,32 @@
 import "reflect-metadata";
+import dotenv from "dotenv";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { AppDataSource } from "./data-source.js";
-import { User } from "./entities/User.js";
+import { userRoutes } from "./routes/userRoutes.js";
+import { sectorRoutes, kpiRoutes } from "./routes/sectorRoutes.js";
+import { entryRoutes } from "./routes/entryRoutes.js";
+import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
+import { entryRoutes } from "./routes/entryRoutes.js";
+import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
 
-const fastify = Fastify({ logger: true });
+// Carregar variáveis de ambiente
+dotenv.config();
+
+// Configuração do servidor
+const PORT = parseInt(process.env.PORT || "3000");
+const HOST = process.env.HOST || "0.0.0.0";
+const CORS_ORIGIN = process.env.CORS_ORIGIN 
+    ? process.env.CORS_ORIGIN.split(",")
+    : ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"];
+
+const fastify = Fastify({ 
+    logger: process.env.NODE_ENV === "development" 
+});
 
 // Register CORS plugin
 fastify.register(cors, {
-    origin: ["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    origin: CORS_ORIGIN,
     credentials: true,
 });
 
@@ -30,19 +48,21 @@ fastify.get("/health", async (request, reply) => {
     };
 });
 
-// Rota de usuários (existente)
-fastify.get("/api/users", async (request, reply) => {
-    const userRepository = AppDataSource.getRepository(User);
-    return await userRepository.find();
-});
+// Registrar rotas
+fastify.register(userRoutes);
+fastify.register(sectorRoutes);
+fastify.register(kpiRoutes);
+fastify.register(entryRoutes);
+fastify.register(actionPlanRoutes);
 
 const start = async () => {
     try {
         await AppDataSource.initialize();
         console.log("✅ Banco de dados conectado!");
 
-        await fastify.listen({ port: 3000, host: "0.0.0.0" });
-        console.log("🚀 Servidor rodando em http://localhost:3000");
+        await fastify.listen({ port: PORT, host: HOST });
+        console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
+        console.log(`📡 CORS habilitado para: ${CORS_ORIGIN.join(", ")}`);
     } catch (err) {
         fastify.log.error(err);
         process.exit(1);

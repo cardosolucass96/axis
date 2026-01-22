@@ -9,6 +9,7 @@ import { dataService } from './services/dataService';
 import { User } from './types';
 import { TrendingUp, User as UserIcon, Shield, X } from 'lucide-react';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { LoadingProvider } from './contexts/LoadingContext';
 
 // Google Logo Component for brand consistency
 const GoogleLogo = () => (
@@ -152,7 +153,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
   return (
     <ThemeProvider>
-      <AppContent />
+      <LoadingProvider>
+        <AppContent />
+      </LoadingProvider>
     </ThemeProvider>
   );
 };

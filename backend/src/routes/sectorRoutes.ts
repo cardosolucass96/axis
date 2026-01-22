@@ -1,0 +1,257 @@
+import { FastifyInstance } from "fastify";
+import { SectorService } from "../services/SectorService";
+import { KPIService } from "../services/KPIService";
+
+const sectorService = new SectorService();
+const kpiService = new KPIService();
+
+export async function sectorRoutes(app: FastifyInstance) {
+    // GET /api/sectors - Listar todos os setores
+    app.get("/api/sectors", async (request, reply) => {
+        try {
+            const sectors = await sectorService.getAllSectors();
+            return reply.send({
+                status: "success",
+                data: sectors,
+            });
+        } catch (error) {
+            return reply.code(500).send({
+                status: "error",
+                message: "Erro ao buscar setores",
+            });
+        }
+    });
+
+    // GET /api/sectors/:id - Obter setor por ID
+    app.get("/api/sectors/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const sector = await sectorService.getSectorById(id);
+            
+            if (!sector) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "Setor não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: sector,
+            });
+        } catch (error) {
+            return reply.code(500).send({
+                status: "error",
+                message: "Erro ao buscar setor",
+            });
+        }
+    });
+
+    // POST /api/sectors - Criar novo setor
+    app.post("/api/sectors", async (request, reply) => {
+        try {
+            const { name } = request.body as { name: string };
+            const sector = await sectorService.createSector(name);
+
+            return reply.code(201).send({
+                status: "success",
+                data: sector,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao criar setor",
+            });
+        }
+    });
+
+    // PUT /api/sectors/:id - Atualizar setor
+    app.put("/api/sectors/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const { name } = request.body as { name: string };
+            
+            const sector = await sectorService.updateSector(id, name);
+            
+            if (!sector) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "Setor não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: sector,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao atualizar setor",
+            });
+        }
+    });
+
+    // DELETE /api/sectors/:id - Deletar setor
+    app.delete("/api/sectors/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const success = await sectorService.deleteSector(id);
+            
+            if (!success) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "Setor não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: null,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao deletar setor",
+            });
+        }
+    });
+
+    // GET /api/sectors/:sectorId/kpis - Listar KPIs de um setor
+    app.get("/api/sectors/:sectorId/kpis", async (request, reply) => {
+        try {
+            const { sectorId } = request.params as { sectorId: string };
+            const kpis = await kpiService.getKPIsBySector(sectorId);
+
+            return reply.send({
+                status: "success",
+                data: kpis,
+            });
+        } catch (error) {
+            return reply.code(500).send({
+                status: "error",
+                message: "Erro ao buscar KPIs",
+            });
+        }
+    });
+
+    // POST /api/sectors/:sectorId/kpis - Criar novo KPI
+    app.post("/api/sectors/:sectorId/kpis", async (request, reply) => {
+        try {
+            const { sectorId } = request.params as { sectorId: string };
+            const body = request.body as any;
+            
+            const kpi = await kpiService.createKPI({
+                name: body.name,
+                unit: body.unit,
+                format: body.format,
+                sectorId,
+            });
+
+            return reply.code(201).send({
+                status: "success",
+                data: kpi,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao criar KPI",
+            });
+        }
+    });
+}
+
+export async function kpiRoutes(app: FastifyInstance) {
+    // GET /api/kpis - Listar todos os KPIs
+    app.get("/api/kpis", async (request, reply) => {
+        try {
+            const kpis = await kpiService.getAllKPIs();
+            return reply.send({
+                status: "success",
+                data: kpis,
+            });
+        } catch (error) {
+            return reply.code(500).send({
+                status: "error",
+                message: "Erro ao buscar KPIs",
+            });
+        }
+    });
+
+    // GET /api/kpis/:id - Obter KPI por ID
+    app.get("/api/kpis/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const kpi = await kpiService.getKPIById(id);
+            
+            if (!kpi) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "KPI não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: kpi,
+            });
+        } catch (error) {
+            return reply.code(500).send({
+                status: "error",
+                message: "Erro ao buscar KPI",
+            });
+        }
+    });
+
+    // PUT /api/kpis/:id - Atualizar KPI
+    app.put("/api/kpis/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const body = request.body as any;
+            
+            const kpi = await kpiService.updateKPI(id, body);
+            
+            if (!kpi) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "KPI não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: kpi,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao atualizar KPI",
+            });
+        }
+    });
+
+    // DELETE /api/kpis/:id - Deletar KPI
+    app.delete("/api/kpis/:id", async (request, reply) => {
+        try {
+            const { id } = request.params as { id: string };
+            const success = await kpiService.deleteKPI(id);
+            
+            if (!success) {
+                return reply.code(404).send({
+                    status: "error",
+                    message: "KPI não encontrado",
+                });
+            }
+
+            return reply.send({
+                status: "success",
+                data: null,
+            });
+        } catch (error: any) {
+            return reply.code(400).send({
+                status: "error",
+                message: error.message || "Erro ao deletar KPI",
+            });
+        }
+    });
+}
