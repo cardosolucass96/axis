@@ -3,8 +3,25 @@
  * Configuração centralizada de requisições
  */
 
-// Fallback para a URL da API
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || "http://localhost:3000/api";
+// Detecta a URL da API dinamicamente
+const getApiBaseUrl = () => {
+    const viteUrl = (import.meta as any).env?.VITE_API_URL;
+    if (viteUrl) return viteUrl;
+
+    // Em produção, usa a mesma origem
+    if (import.meta.env.PROD) {
+        return `${window.location.origin}/api`;
+    }
+
+    // Em desenvolvimento, tenta a URL do túnel ou localhost
+    const host = window.location.hostname;
+    if (host.includes("cardosolucas.com")) {
+        return "https://dev.cardosolucas.com/api";
+    }
+    return "http://localhost:3000/api";
+};
+
+const API_BASE_URL = getApiBaseUrl();
 
 interface ApiResponse<T> {
     data: T;

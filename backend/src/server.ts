@@ -2,12 +2,14 @@ import "reflect-metadata";
 import dotenv from "dotenv";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import { AppDataSource } from "./data-source.js";
 import { userRoutes } from "./routes/userRoutes.js";
 import { sectorRoutes, kpiRoutes } from "./routes/sectorRoutes.js";
 import { entryRoutes } from "./routes/entryRoutes.js";
 import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
 import { dashboardRoutes } from "./routes/dashboardRoutes.js";
+import { authRoutes } from "./routes/authRoutes.js";
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -17,7 +19,7 @@ const PORT = parseInt(process.env.PORT || "3000");
 const HOST = process.env.HOST || "0.0.0.0";
 const CORS_ORIGIN = process.env.CORS_ORIGIN
     ? process.env.CORS_ORIGIN.split(",")
-    : ["http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:5173", "http://127.0.0.1:3001"];
+    : ["http://localhost:5173", "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:5173", "http://127.0.0.1:3001", "https://dev.cardosolucas.com"];
 
 const fastify = Fastify({
     logger: process.env.NODE_ENV === "development"
@@ -28,6 +30,12 @@ fastify.register(cors, {
     origin: CORS_ORIGIN,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+});
+
+// Register Cookie plugin
+fastify.register(cookie, {
+    secret: process.env.SESSION_SECRET || "sua_chave_secreta_muito_segura_aqui_123",
+    parseOptions: {}
 });
 
 // --- Rota de Health Check ---
@@ -48,13 +56,14 @@ fastify.get("/health", async (request, reply) => {
     };
 });
 
-// Registrar rotas
-fastify.register(userRoutes);
-fastify.register(sectorRoutes);
-fastify.register(kpiRoutes);
-fastify.register(entryRoutes);
-fastify.register(actionPlanRoutes);
-fastify.register(dashboardRoutes);
+// Registrar rotas com prefixo /api
+fastify.register(authRoutes, { prefix: "/api" });
+fastify.register(userRoutes, { prefix: "/api" });
+fastify.register(sectorRoutes, { prefix: "/api" });
+fastify.register(kpiRoutes, { prefix: "/api" });
+fastify.register(entryRoutes, { prefix: "/api" });
+fastify.register(actionPlanRoutes, { prefix: "/api" });
+fastify.register(dashboardRoutes, { prefix: "/api" });
 
 const start = async () => {
     try {

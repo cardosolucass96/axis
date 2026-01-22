@@ -11,6 +11,7 @@ import { User } from './types';
 import { TrendingUp, User as UserIcon, Shield, X } from 'lucide-react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 // Google Logo Component for brand consistency
 const GoogleLogo = () => (
@@ -25,38 +26,18 @@ const GoogleLogo = () => (
 );
 
 const AppContent: React.FC = () => {
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [isGoogleLoginOpen, setIsGoogleLoginOpen] = useState(false);
-  const [allUsers, setAllUsers] = useState<User[]>([]);
-  const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+  const { user: authUser, isLoading: isAuthLoading, isAuthenticated, login, logout } = useAuth();
+  
+  // Converte o usuário do auth para o formato esperado
+  const currentUser: User | null = authUser ? {
+    id: authUser.id,
+    name: authUser.name,
+    email: authUser.email,
+    role: authUser.role,
+    avatarInitials: authUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+  } : null;
 
-  // Carregar usuários ao montar o componente
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        setIsLoadingUsers(true);
-        const users = await dataService.getUsers();
-        setAllUsers(users);
-      } catch (error) {
-        console.error('Erro ao carregar usuários:', error);
-      } finally {
-        setIsLoadingUsers(false);
-      }
-    };
-
-    loadUsers();
-  }, []);
-
-  const handleLogin = (user: User) => {
-    setCurrentUser(user);
-    setIsGoogleLoginOpen(false);
-  };
-
-  const handleLogout = () => {
-    setCurrentUser(null);
-  };
-
-  // Componente de Login
+  // Componente de Login usando Google OAuth real
   const LoginPage: React.FC = () => (
     <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
       {/* Decorative Background Elements */}
@@ -74,12 +55,11 @@ const AppContent: React.FC = () => {
         <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-8 text-center">Gestão de KPIs de Alta Performance</p>
 
         <button
-          onClick={() => setIsGoogleLoginOpen(true)}
-          disabled={isLoadingUsers}
-          className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg border border-zinc-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+          onClick={login}
+          className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg border border-zinc-200 active:scale-95"
         >
           <GoogleLogo />
-          <span>{isLoadingUsers ? 'Carregando...' : 'Entrar com Google'}</span>
+          <span>Entrar com Google</span>
         </button>
 
         <div className="mt-8 text-center">
@@ -88,48 +68,6 @@ const AppContent: React.FC = () => {
           </p>
         </div>
       </div>
-
-      {/* Mock Google Account Chooser Modal */}
-      {isGoogleLoginOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in p-4">
-          <div className="bg-white dark:bg-zinc-900 w-full max-w-[400px] rounded-2xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
-            <div className="p-6 pb-4">
-              <div className="flex justify-center mb-4">
-                <GoogleLogo />
-              </div>
-              <h2 className="text-xl text-center font-medium text-zinc-900 dark:text-white mb-2">Fazer login com o Google</h2>
-              <p className="text-center text-zinc-600 dark:text-zinc-400 text-sm mb-6">Ir para <span className="font-semibold text-amber-600">Axis</span></p>
-
-              <div className="space-y-1 max-h-[300px] overflow-y-auto">
-                {allUsers.map(user => (
-                  <button
-                    key={user.id}
-                    onClick={() => handleLogin(user)}
-                    className="w-full flex items-center gap-3 p-3 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md transition-colors border-b border-transparent hover:border-zinc-100 dark:hover:border-zinc-700 text-left group"
-                  >
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ${user.role === 'admin' ? 'bg-amber-600' : 'bg-zinc-700'}`}>
-                      {user.avatarInitials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200 group-hover:text-zinc-900 dark:group-hover:text-white truncate">{user.name}</p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{user.email}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="bg-zinc-50 dark:bg-zinc-800 p-4 border-t border-zinc-100 dark:border-zinc-700 flex justify-end">
-              <button
-                onClick={() => setIsGoogleLoginOpen(false)}
-                className="text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-white px-4 py-2"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -140,15 +78,27 @@ const AppContent: React.FC = () => {
     </div>
   );
 
+  // Loading state
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto"></div>
+          <p className="mt-4 text-zinc-500 dark:text-zinc-400">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Se não está logado, mostrar página de login
-  if (!currentUser) {
+  if (!isAuthenticated || !currentUser) {
     return <LoginPage />;
   }
 
   return (
     <Layout
       currentUser={currentUser}
-      onLogout={handleLogout}
+      onLogout={logout}
     >
       <Routes>
         <Route
@@ -183,9 +133,11 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <LoadingProvider>
-        <Router>
-          <AppContent />
-        </Router>
+        <AuthProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </AuthProvider>
       </LoadingProvider>
     </ThemeProvider>
   );
