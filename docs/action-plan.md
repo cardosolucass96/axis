@@ -71,6 +71,47 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
+## Etapa 3.5: Integração Frontend-Backend (Refatoração Incremental)
+
+**Objetivo**: Refatorar o frontend para consumir APIs reais do backend de forma incremental, em paralelo com o desenvolvimento
+
+### 3.5.1 - Configuração do Cliente HTTP
+- **Objetivo**: Criar cliente HTTP para comunicação com backend
+- **Tarefas**:
+  - [ ] Criar arquivo `src/services/api.ts` com configuração do fetch/axios
+  - [ ] Configurar base URL (http://localhost:3000/api)
+  - [ ] Implementar interceptadores para tratamento de erros
+
+### 3.5.2 - Refatorar DataService para Chamar Backend
+- **Objetivo**: Substituir dados mockados por chamadas HTTP
+- **Tarefas**:
+  - [ ] Criar métodos que chamam `GET /api/users`
+  - [ ] Criar métodos que chamam `GET /api/sectors`
+  - [ ] Implementar cache local para reduzir requests (opcional)
+  - [ ] Adicionar loading states durante requisições
+  - [ ] Implementar tratamento de erros com feedback ao usuário
+
+### 3.5.3 - Atualizar Estrutura do Frontend
+- **Objetivo**: Preparar o frontend para dados dinâmicos
+- **Tarefas**:
+  - [ ] Remover INITIAL_ENTRIES do constants.ts (usar apenas dados do backend)
+  - [ ] Remover SECTORS do constants.ts (usar dados do backend)
+  - [ ] Adicionar contexto para loading states em `ThemeContext` ou criar `LoadingContext`
+  - [ ] Adicionar tratamento de erro genérico
+  - [ ] Adicionar função de retry para requisições falhadas
+
+### 3.5.4 - Testar Integração por Página
+- **Objetivo**: Validar funcionamento de cada página com dados reais
+- **Tarefas após cada etapa de backend**:
+  - [ ] Etapa 4 (Usuários): Testar UserManagementPage + Dashboard
+  - [ ] Etapa 5 (Setores/KPIs): Testar StructureManagementPage + DataEntry
+  - [ ] Etapa 6 (KpiEntry): Testar DataEntry com salva dados reais
+  - [ ] Etapa 7 (ActionPlan): Testar ActionPlansPage com dados reais
+  - [ ] Etapa 8 (Dashboard): Testar Dashboard com dados agregados
+
+**Tempo estimado**: 2 horas iniciais + 1 hora por teste incremental
+**Status**: ⏳ PRÓXIMA ETAPA
+
 ## Etapa 4: Rotas de Autenticação e Usuários
 
 ### 4.1 - Endpoints de Usuários
@@ -264,35 +305,26 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 12: Integração com Frontend
+## Etapa 12: DTOs e Validação
 
-### 12.1 - Configuração CORS
-- **Objetivo**: Permitir requisições do frontend
+### 12.1 - Data Transfer Objects (DTOs)
+- **Objetivo**: Validar e transformar dados de entrada
 - **Tarefas**:
-  - [ ] Configurar CORS para localhost:5173 (Vite dev)
-  - [ ] Configurar CORS para produção (quando souber URL)
+  - [ ] DTO para criar/atualizar User
+  - [ ] DTO para criar/atualizar Sector
+  - [ ] DTO para criar/atualizar KPI
+  - [ ] DTO para criar/atualizar KpiEntry
+  - [ ] DTO para criar/atualizar ActionPlan
+  - [ ] Usar class-validator para validação automática
 
-### 12.2 - Testes de Integração Frontend-Backend
-- **Objetivo**: Validar fluxos completo
+### 12.2 - Response DTOs
+- **Objetivo**: Padronizar respostas
 - **Tarefas**:
-  - [ ] Testar login no frontend
-  - [ ] Testar criação de setor
-  - [ ] Testar criação de KPI
-  - [ ] Testar entrada de dados
-  - [ ] Testar criação de plano de ação
-  - [ ] Testar visualização do Dashboard
-  - [ ] Testar filtros e busca
-  - [ ] Testar exportação de dados (CSV)
+  - [ ] Criar estrutura padrão de resposta (data, status, message)
+  - [ ] Implementar pagination (limit, offset, total)
+  - [ ] Documentar formato de response para cada endpoint
 
-### 12.3 - Ajustes Conforme Descobertas
-- **Objetivo**: Refinar baseado em feedback
-- **Tarefas**:
-  - [ ] Corrigir incompatibilidades encontradas
-  - [ ] Ajustar formatos de resposta se necessário
-  - [ ] Melhorar performance conforme observado
-  - [ ] Adicionar endpoints faltantes
-
-**Tempo estimado**: 3-5 horas
+**Tempo estimado**: 2-3 horas
 
 ---
 
@@ -326,32 +358,67 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 | 1 | Setup Inicial | 2-3h | 2-3h |
 | 2 | Entidades | 3-4h | 5-7h |
 | 3 | Repositórios e Serviços | 4-5h | 9-12h |
-| 4 | Autenticação e Usuários | 2-3h | 11-15h |
-| 5 | Setores e KPIs | 3-4h | 14-19h |
-| 6 | KpiEntry | 3-4h | 17-23h |
-| 7 | Action Plans | 3-4h | 20-27h |
-| 8 | Dashboard | 4-5h | 24-32h |
-| 9 | Middleware e Erros | 2-3h | 26-35h |
-| 10 | DTOs e Validação | 2-3h | 28-38h |
-| 11 | Testes | 4-5h | 32-43h |
-| 12 | Integração Frontend | 3-5h | 35-48h |
-| 13 | Documentação e Deploy | 2-3h | 37-51h |
+| 3.5 | Integração Frontend | 2h + tests | 11-14h |
+| 4 | Autenticação e Usuários | 2-3h | 13-17h |
+| 5 | Setores e KPIs | 3-4h | 16-21h |
+| 6 | KpiEntry | 3-4h | 19-25h |
+| 7 | Action Plans | 3-4h | 22-29h |
+| 8 | Dashboard | 4-5h | 26-34h |
+| 9 | Middleware e Erros | 2-3h | 28-37h |
+| 10 | DTOs e Validação | 2-3h | 30-40h |
+| 11 | Testes | 4-5h | 34-45h |
+| 12 | Documentação e Deploy | 2-3h | 36-48h |
 
-**Total estimado**: 37-51 horas (1-2 semanas de trabalho)
+**Total estimado**: 36-48 horas (1-2 semanas de trabalho)
 
 ---
 
 ## Prioridades Recomendadas
 
-### MVP (Semana 1)
-1. ✅ Etapas 1-7 (Setup até Action Plans)
-2. ✅ Integração básica com Frontend
-3. ✅ Testes de smoke test
+### MVP - Integração Básica (Semana 1)
+1. ✅ Etapas 1-3 (Setup, Entidades, Repositórios/Serviços)
+2. ✅ Etapa 3.5 (Refatoração do Frontend - Parte 1)
+3. ✅ Etapas 4-6 (Autenticação, Estrutura, Dados)
+4. ✅ Testes incrementais do frontend após cada etapa
+5. ✅ Validação de fluxos básicos
 
-### Fase 2 (Semana 2)
-1. ✅ Etapas 8-10 (Dashboard, Middleware, DTOs)
-2. ✅ Testes completos
-3. ✅ Documentação e deploy
+### Fase 2 - Funcionalidades Avançadas (Semana 2)
+1. ✅ Etapas 7-8 (Action Plans, Dashboard)
+2. ✅ Etapas 9-10 (Middleware, DTOs, Validação)
+3. ✅ Etapa 3.5 (Refatoração do Frontend - Parte 2)
+4. ✅ Testes completos
+5. ✅ Documentação e preparação para deploy
+
+---
+
+## Estratégia de Integração Frontend-Backend
+
+A integração será feita de forma **incremental e paralela**:
+
+1. **Após Etapa 4** (Usuários):
+   - Frontend chama `GET /api/users`
+   - Testa login com usuários reais
+   - Valida `UserManagementPage`
+
+2. **Após Etapa 5** (Setores/KPIs):
+   - Frontend chama `GET /api/sectors` (com KPIs)
+   - Testa criação de setor/KPI
+   - Valida `StructureManagementPage`
+
+3. **Após Etapa 6** (KpiEntry):
+   - Frontend chama `POST/PUT /api/entries`
+   - Testa salva dados reais
+   - Valida `DataEntryPage`
+
+4. **Após Etapa 7** (ActionPlans):
+   - Frontend chama endpoints de planos
+   - Testa criação e mudança de status
+   - Valida `ActionPlansPage`
+
+5. **Após Etapa 8** (Dashboard):
+   - Frontend chama endpoints agregados
+   - Testa visualização com dados reais
+   - Valida `Dashboard`
 
 ---
 
