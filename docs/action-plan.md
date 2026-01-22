@@ -44,29 +44,30 @@ Desenvolvimento de um backend completo em TypeORM + Fastify que forneça APIs pa
 
 ---
 
-## Etapa 3: Implementação de Repositórios e Serviços
+## Etapa 3: Implementação de Repositórios e Serviços ✅ COMPLETA
 
 ### 3.1 - Criar Repositórios
 - **Objetivo**: Encapsular lógica de acesso aos dados
 - **Tarefas**:
-  - [ ] Repository para User
-  - [ ] Repository para Sector
-  - [ ] Repository para KPI
-  - [ ] Repository para KpiEntry
-  - [ ] Repository para ActionPlan
-  - [ ] Repository para RootCause
+  - [x] Repository para User
+  - [x] Repository para Sector
+  - [x] Repository para KPI
+  - [x] Repository para KpiEntry
+  - [x] Repository para ActionPlan
+  - [x] Repository para RootCause
 
 ### 3.2 - Criar Serviços de Negócio
 - **Objetivo**: Implementar lógica de negócio
 - **Tarefas**:
-  - [ ] Service para gestão de Setores (CRUD)
-  - [ ] Service para gestão de KPIs (CRUD por setor)
-  - [ ] Service para gestão de Usuários (CRUD, vincular a setores)
-  - [ ] Service para gestão de KpiEntry (CRUD, cálculos de gap/gapPercentage)
-  - [ ] Service para gestão de ActionPlans (CRUD, mudança de status)
+  - [x] Service para gestão de Setores (CRUD)
+  - [x] Service para gestão de KPIs (CRUD por setor)
+  - [x] Service para gestão de Usuários (CRUD, vincular a setores)
+  - [x] Service para gestão de KpiEntry (CRUD, cálculos de gap/gapPercentage)
+  - [x] Service para gestão de ActionPlans (CRUD, mudança de status)
   - [ ] Service para cálculos de Dashboard (health index, trends, financial bridge, aging)
 
 **Tempo estimado**: 4-5 horas
+**Status**: ✅ CONCLUÍDO - Todos os repositórios e serviços criados
 
 ---
 
