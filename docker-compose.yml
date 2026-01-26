@@ -2,7 +2,7 @@ version: "3.7"
 
 services:
   axis-backend:
-    image: ghcr.io/lucas-cardoso/axis/axis-backend:latest
+    image: ghcr.io/cardosolucass96/axis/axis-backend:latest
     # Para build local, descomente:
     # build:
     #   context: ./backend
@@ -50,7 +50,7 @@ services:
         - traefik.http.routers.axis-backend.middlewares=axis-strip-api
 
   axis-frontend:
-    image: ghcr.io/lucas-cardoso/axis/axis-frontend:latest
+    image: ghcr.io/cardosolucass96/axis/axis-frontend:latest
     # Para build local, descomente:
     # build:
     #   context: ./frontend

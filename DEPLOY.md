@@ -34,8 +34,8 @@ O repositório inclui um workflow que builda e publica as imagens automaticament
 ### Imagens disponíveis
 
 Após o primeiro build, as imagens ficam disponíveis em:
-- `ghcr.io/lucas-cardoso/axis/axis-backend:latest`
-- `ghcr.io/lucas-cardoso/axis/axis-frontend:latest`
+- `ghcr.io/cardosolucass96/axis/axis-backend:latest`
+- `ghcr.io/cardosolucass96/axis/axis-frontend:latest`
 
 ---
 
