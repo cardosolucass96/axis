@@ -10,6 +10,7 @@ import { entryRoutes } from "./routes/entryRoutes.js";
 import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
 import { dashboardRoutes } from "./routes/dashboardRoutes.js";
 import { authRoutes } from "./routes/authRoutes.js";
+import { monthlyTargetRoutes } from "./routes/monthlyTargetRoutes.js";
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -64,6 +65,7 @@ fastify.register(kpiRoutes, { prefix: "/api" });
 fastify.register(entryRoutes, { prefix: "/api" });
 fastify.register(actionPlanRoutes, { prefix: "/api" });
 fastify.register(dashboardRoutes, { prefix: "/api" });
+fastify.register(monthlyTargetRoutes, { prefix: "/api" });
 
 const start = async () => {
     try {

@@ -1,14 +1,434 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { generateCodeVerifier, generateState } from "arctic";
 import { google, getGoogleUser } from "../auth/google";
-import { lucia, createUser, getUserByGoogleId, getUserByEmail, updateUserGoogleId } from "../auth/lucia";
+import { 
+    lucia, 
+    createUser, 
+    getUserByGoogleId, 
+    getUserByEmail, 
+    updateUserGoogleId,
+    hashPassword,
+    verifyPassword,
+    isValidEmail,
+    isAllowedDomain,
+    validatePassword,
+    userHasPassword,
+    userHasGoogleAuth
+} from "../auth/lucia";
 import { generateIdFromEntropySize } from "lucia";
+import { AppDataSource } from "../data-source";
+import { User as UserEntity } from "../entities/User";
 import "dotenv/config";
 
 // Detecta se está usando HTTPS
 const isSecure = process.env.GOOGLE_REDIRECT_URI?.startsWith("https://") || process.env.NODE_ENV === "production";
 
+// Email padrão para login de desenvolvimento
+const DEV_USER_EMAIL = "lucas.cardoso@grupovorp.com";
+
+// Domínio permitido
+const ALLOWED_DOMAIN = "@grupovorp.com";
+
+// Tipos para as requisições
+interface LoginRequest {
+    email: string;
+    password: string;
+}
+
+interface RegisterRequest {
+    name: string;
+    email: string;
+    password: string;
+    confirmPassword: string;
+}
+
 export async function authRoutes(app: FastifyInstance) {
+    // Login de desenvolvimento (apenas localhost)
+    app.get("/auth/dev-login", async (request: FastifyRequest, reply: FastifyReply) => {
+        const host = request.headers.host || "";
+        
+        // Só permite em localhost/127.0.0.1
+        if (!host.includes("localhost") && !host.includes("127.0.0.1")) {
+            return reply.status(403).send({ error: "Dev login só funciona em localhost" });
+        }
+
+        try {
+            // Busca usuário na tabela de autenticação
+            let user = getUserByEmail(DEV_USER_EMAIL);
+
+            if (!user) {
+                // Busca na tabela TypeORM
+                const userRepository = AppDataSource.getRepository(UserEntity);
+                const existingUser = await userRepository.findOne({ where: { email: DEV_USER_EMAIL } });
+
+                if (existingUser) {
+                    // Cria na tabela de autenticação
+                    createUser({
+                        id: existingUser.id,
+                        email: existingUser.email,
+                        name: existingUser.name,
+                        role: existingUser.role
+                    });
+                    user = {
+                        id: existingUser.id,
+                        email: existingUser.email,
+                        name: existingUser.name,
+                        role: existingUser.role,
+                        avatar_url: null,
+                        google_id: null
+                    };
+                } else {
+                    return reply.status(404).send({ error: "Usuário de desenvolvimento não encontrado" });
+                }
+            }
+
+            // Cria sessão
+            const session = await lucia.createSession(user.id, {});
+            const sessionCookie = lucia.createSessionCookie(session.id);
+
+            reply.setCookie(sessionCookie.name, sessionCookie.value, {
+                path: sessionCookie.attributes.path || "/",
+                httpOnly: true,
+                secure: false, // localhost não usa HTTPS
+                sameSite: "lax",
+                maxAge: sessionCookie.attributes.maxAge
+            });
+
+            const frontendUrl = "http://localhost:5173";
+            return reply.redirect(`${frontendUrl}/`);
+        } catch (error) {
+            console.error("Erro no dev login:", error);
+            return reply.status(500).send({ error: "Erro no login de desenvolvimento" });
+        }
+    });
+
+    // ============================================
+    // LOGIN COM EMAIL E SENHA
+    // ============================================
+    app.post("/auth/login", async (request: FastifyRequest<{ Body: LoginRequest }>, reply: FastifyReply) => {
+        const { email, password } = request.body;
+
+        // Validações básicas
+        if (!email || !password) {
+            return reply.status(400).send({ 
+                error: "MISSING_FIELDS",
+                message: "Email e senha são obrigatórios" 
+            });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
+        if (!isValidEmail(normalizedEmail)) {
+            return reply.status(400).send({ 
+                error: "INVALID_EMAIL",
+                message: "Email inválido" 
+            });
+        }
+
+        try {
+            // Busca usuário
+            let user = getUserByEmail(normalizedEmail);
+
+            // Se não existe na tabela de auth, verifica TypeORM
+            if (!user) {
+                const userRepository = AppDataSource.getRepository(UserEntity);
+                const existingUser = await userRepository.findOne({ where: { email: normalizedEmail } });
+
+                if (!existingUser) {
+                    return reply.status(401).send({ 
+                        error: "USER_NOT_FOUND",
+                        message: "Não encontramos uma conta com esse email. Deseja criar uma conta?" 
+                    });
+                }
+
+                // Usuário existe no TypeORM mas não na auth (usuário do seed sem senha)
+                return reply.status(401).send({
+                    error: "PASSWORD_NOT_SET",
+                    message: "Esta conta ainda não possui senha. Use o Google para entrar ou defina uma senha."
+                });
+            }
+
+            // Verifica se o usuário tem senha definida
+            if (!user.password_hash) {
+                // Verifica se tem Google vinculado
+                if (user.google_id) {
+                    return reply.status(401).send({
+                        error: "USE_GOOGLE",
+                        message: "Esta conta utiliza login com Google. Por favor, entre com o Google."
+                    });
+                }
+                return reply.status(401).send({
+                    error: "PASSWORD_NOT_SET",
+                    message: "Esta conta ainda não possui senha configurada."
+                });
+            }
+
+            // Verifica a senha
+            const validPassword = await verifyPassword(password, user.password_hash);
+            if (!validPassword) {
+                return reply.status(401).send({ 
+                    error: "INVALID_CREDENTIALS",
+                    message: "Email ou senha incorretos" 
+                });
+            }
+
+            // Cria sessão
+            const session = await lucia.createSession(user.id, {});
+            const sessionCookie = lucia.createSessionCookie(session.id);
+
+            reply.setCookie(sessionCookie.name, sessionCookie.value, {
+                path: sessionCookie.attributes.path || "/",
+                httpOnly: true,
+                secure: isSecure,
+                sameSite: "lax",
+                maxAge: sessionCookie.attributes.maxAge
+            });
+
+            return { 
+                success: true,
+                user: {
+                    id: user.id,
+                    email: user.email,
+                    name: user.name,
+                    role: user.role
+                }
+            };
+        } catch (error) {
+            console.error("Erro no login:", error);
+            return reply.status(500).send({ 
+                error: "SERVER_ERROR",
+                message: "Erro interno do servidor" 
+            });
+        }
+    });
+
+    // ============================================
+    // REGISTRO DE NOVO USUÁRIO
+    // ============================================
+    app.post("/auth/register", async (request: FastifyRequest<{ Body: RegisterRequest }>, reply: FastifyReply) => {
+        const { name, email, password, confirmPassword } = request.body;
+
+        // Validações básicas
+        if (!name || !email || !password || !confirmPassword) {
+            return reply.status(400).send({ 
+                error: "MISSING_FIELDS",
+                message: "Todos os campos são obrigatórios" 
+            });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+        const trimmedName = name.trim();
+
+        if (trimmedName.length < 2) {
+            return reply.status(400).send({ 
+                error: "INVALID_NAME",
+                message: "O nome deve ter pelo menos 2 caracteres" 
+            });
+        }
+
+        if (!isValidEmail(normalizedEmail)) {
+            return reply.status(400).send({ 
+                error: "INVALID_EMAIL",
+                message: "Email inválido" 
+            });
+        }
+
+        if (!isAllowedDomain(normalizedEmail)) {
+            return reply.status(400).send({ 
+                error: "DOMAIN_NOT_ALLOWED",
+                message: `Apenas emails com domínio ${ALLOWED_DOMAIN} são permitidos` 
+            });
+        }
+
+        if (password !== confirmPassword) {
+            return reply.status(400).send({ 
+                error: "PASSWORDS_DONT_MATCH",
+                message: "As senhas não coincidem" 
+            });
+        }
+
+        const passwordValidation = validatePassword(password);
+        if (!passwordValidation.valid) {
+            return reply.status(400).send({ 
+                error: "WEAK_PASSWORD",
+                message: passwordValidation.message 
+            });
+        }
+
+        try {
+            // Verifica se usuário já existe
+            let existingUser = getUserByEmail(normalizedEmail);
+            
+            if (existingUser) {
+                // Se já tem senha, não pode criar de novo
+                if (existingUser.password_hash) {
+                    return reply.status(409).send({ 
+                        error: "EMAIL_EXISTS",
+                        message: "Já existe uma conta com este email" 
+                    });
+                }
+                
+                // Se existe mas não tem senha (ex: criado via Google ou seed), atualiza com senha
+                const passwordHash = await hashPassword(password);
+                const { updateUserPassword } = await import("../auth/lucia");
+                updateUserPassword(existingUser.id, passwordHash);
+                
+                // Cria sessão
+                const session = await lucia.createSession(existingUser.id, {});
+                const sessionCookie = lucia.createSessionCookie(session.id);
+
+                reply.setCookie(sessionCookie.name, sessionCookie.value, {
+                    path: sessionCookie.attributes.path || "/",
+                    httpOnly: true,
+                    secure: isSecure,
+                    sameSite: "lax",
+                    maxAge: sessionCookie.attributes.maxAge
+                });
+
+                return { 
+                    success: true,
+                    message: "Senha configurada com sucesso!",
+                    user: {
+                        id: existingUser.id,
+                        email: existingUser.email,
+                        name: existingUser.name,
+                        role: existingUser.role
+                    }
+                };
+            }
+
+            // Verifica também na tabela TypeORM
+            const userRepository = AppDataSource.getRepository(UserEntity);
+            const typeormUser = await userRepository.findOne({ where: { email: normalizedEmail } });
+
+            if (typeormUser) {
+                // Usuário existe no TypeORM mas não na auth, cria na auth com senha
+                const passwordHash = await hashPassword(password);
+                createUser({
+                    id: typeormUser.id,
+                    email: typeormUser.email,
+                    name: typeormUser.name,
+                    role: typeormUser.role,
+                    passwordHash
+                });
+
+                // Cria sessão
+                const session = await lucia.createSession(typeormUser.id, {});
+                const sessionCookie = lucia.createSessionCookie(session.id);
+
+                reply.setCookie(sessionCookie.name, sessionCookie.value, {
+                    path: sessionCookie.attributes.path || "/",
+                    httpOnly: true,
+                    secure: isSecure,
+                    sameSite: "lax",
+                    maxAge: sessionCookie.attributes.maxAge
+                });
+
+                return { 
+                    success: true,
+                    message: "Conta ativada com sucesso!",
+                    user: {
+                        id: typeormUser.id,
+                        email: typeormUser.email,
+                        name: typeormUser.name,
+                        role: typeormUser.role
+                    }
+                };
+            }
+
+            // Cria novo usuário
+            const userId = generateIdFromEntropySize(10);
+            const passwordHash = await hashPassword(password);
+
+            createUser({
+                id: userId,
+                email: normalizedEmail,
+                name: trimmedName,
+                role: "leader",
+                passwordHash
+            });
+
+            // Também cria na tabela TypeORM para manter sincronizado
+            const newUser = userRepository.create({
+                id: userId,
+                email: normalizedEmail,
+                name: trimmedName,
+                role: "leader"
+            });
+            await userRepository.save(newUser);
+
+            // Cria sessão
+            const session = await lucia.createSession(userId, {});
+            const sessionCookie = lucia.createSessionCookie(session.id);
+
+            reply.setCookie(sessionCookie.name, sessionCookie.value, {
+                path: sessionCookie.attributes.path || "/",
+                httpOnly: true,
+                secure: isSecure,
+                sameSite: "lax",
+                maxAge: sessionCookie.attributes.maxAge
+            });
+
+            return { 
+                success: true,
+                message: "Conta criada com sucesso!",
+                user: {
+                    id: userId,
+                    email: normalizedEmail,
+                    name: trimmedName,
+                    role: "leader"
+                }
+            };
+        } catch (error) {
+            console.error("Erro no registro:", error);
+            return reply.status(500).send({ 
+                error: "SERVER_ERROR",
+                message: "Erro interno do servidor" 
+            });
+        }
+    });
+
+    // ============================================
+    // VERIFICAR SE EMAIL EXISTE
+    // ============================================
+    app.post("/auth/check-email", async (request: FastifyRequest<{ Body: { email: string } }>, reply: FastifyReply) => {
+        const { email } = request.body;
+
+        if (!email) {
+            return reply.status(400).send({ error: "MISSING_EMAIL", message: "Email é obrigatório" });
+        }
+
+        const normalizedEmail = email.toLowerCase().trim();
+
+        if (!isValidEmail(normalizedEmail)) {
+            return reply.status(400).send({ error: "INVALID_EMAIL", message: "Email inválido" });
+        }
+
+        const user = getUserByEmail(normalizedEmail);
+        
+        if (!user) {
+            const userRepository = AppDataSource.getRepository(UserEntity);
+            const typeormUser = await userRepository.findOne({ where: { email: normalizedEmail } });
+            
+            if (typeormUser) {
+                return { 
+                    exists: true, 
+                    hasPassword: false,
+                    hasGoogle: false,
+                    message: "Usuário encontrado, precisa definir senha"
+                };
+            }
+            
+            return { exists: false };
+        }
+
+        return { 
+            exists: true,
+            hasPassword: !!user.password_hash,
+            hasGoogle: !!user.google_id
+        };
+    });
+
     // Inicia fluxo OAuth com Google
     app.get("/auth/google", async (request: FastifyRequest, reply: FastifyReply) => {
         const state = generateState();
@@ -65,36 +485,60 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
-            // Verifica se usuário já existe
+            // Verifica se usuário já existe na tabela de autenticação (Lucia)
             let user = getUserByGoogleId(googleUser.sub);
 
             if (!user) {
-                // Verifica se existe usuário com mesmo email
-                const existingUser = getUserByEmail(googleUser.email);
-
-                if (existingUser) {
-                    // Vincula conta Google ao usuário existente
-                    updateUserGoogleId(existingUser.id, googleUser.sub);
-                    user = { ...existingUser, google_id: googleUser.sub };
+                // Verifica também por email na tabela de autenticação
+                user = getUserByEmail(googleUser.email);
+                
+                if (user) {
+                    // Usuário existe na tabela Lucia mas sem google_id, atualiza
+                    updateUserGoogleId(user.id, googleUser.sub);
+                    user.google_id = googleUser.sub;
                 } else {
-                    // Cria novo usuário
-                    const userId = generateIdFromEntropySize(10);
-                    createUser({
-                        id: userId,
-                        email: googleUser.email,
-                        name: googleUser.name,
-                        avatarUrl: googleUser.picture,
-                        googleId: googleUser.sub,
-                        role: "leader"
-                    });
-                    user = {
-                        id: userId,
-                        email: googleUser.email,
-                        name: googleUser.name,
-                        role: "leader",
-                        avatar_url: googleUser.picture || null,
-                        google_id: googleUser.sub
-                    };
+                    // Busca na tabela TypeORM (usuários do seed)
+                    const userRepository = AppDataSource.getRepository(UserEntity);
+                    const existingUser = await userRepository.findOne({ where: { email: googleUser.email } });
+
+                    if (existingUser) {
+                        // Cria o usuário na tabela de autenticação (Lucia) com os dados do TypeORM
+                        createUser({
+                            id: existingUser.id,
+                            email: existingUser.email,
+                            name: existingUser.name,
+                            avatarUrl: googleUser.picture,
+                            googleId: googleUser.sub,
+                            role: existingUser.role
+                        });
+                        user = {
+                            id: existingUser.id,
+                            email: existingUser.email,
+                            name: existingUser.name,
+                            role: existingUser.role,
+                            avatar_url: googleUser.picture || null,
+                            google_id: googleUser.sub
+                        };
+                    } else {
+                        // Cria novo usuário (login pela primeira vez)
+                        const userId = generateIdFromEntropySize(10);
+                        createUser({
+                            id: userId,
+                            email: googleUser.email,
+                            name: googleUser.name,
+                            avatarUrl: googleUser.picture,
+                            googleId: googleUser.sub,
+                            role: "leader"
+                        });
+                        user = {
+                            id: userId,
+                            email: googleUser.email,
+                            name: googleUser.name,
+                            role: "leader",
+                            avatar_url: googleUser.picture || null,
+                            google_id: googleUser.sub
+                        };
+                    }
                 }
             }
 
@@ -163,7 +607,8 @@ export async function authRoutes(app: FastifyInstance) {
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                avatarUrl: user.avatarUrl
+                avatarUrl: user.avatarUrl,
+                sectorId: user.sectorId
             };
         } catch (error) {
             console.error("Erro ao validar sessão:", error);

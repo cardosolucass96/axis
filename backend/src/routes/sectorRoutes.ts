@@ -6,8 +6,8 @@ const sectorService = new SectorService();
 const kpiService = new KPIService();
 
 export async function sectorRoutes(app: FastifyInstance) {
-    // GET /api/sectors - Listar todos os setores
-    app.get("/api/sectors", async (request, reply) => {
+    // GET /sectors - Listar todos os setores
+    app.get("/sectors", async (request, reply) => {
         try {
             const sectors = await sectorService.getAllSectors();
             return reply.send({
@@ -22,8 +22,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // GET /api/sectors/:id - Obter setor por ID
-    app.get("/api/sectors/:id", async (request, reply) => {
+    // GET /sectors/:id - Obter setor por ID
+    app.get("/sectors/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const sector = await sectorService.getSectorById(id);
@@ -47,8 +47,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /api/sectors - Criar novo setor
-    app.post("/api/sectors", async (request, reply) => {
+    // POST /sectors - Criar novo setor
+    app.post("/sectors", async (request, reply) => {
         try {
             const { name } = request.body as { name: string };
             const sector = await sectorService.createSector(name);
@@ -65,8 +65,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // PUT /api/sectors/:id - Atualizar setor
-    app.put("/api/sectors/:id", async (request, reply) => {
+    // PUT /sectors/:id - Atualizar setor
+    app.put("/sectors/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const { name } = request.body as { name: string };
@@ -92,8 +92,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // DELETE /api/sectors/:id - Deletar setor
-    app.delete("/api/sectors/:id", async (request, reply) => {
+    // DELETE /sectors/:id - Deletar setor
+    app.delete("/sectors/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const success = await sectorService.deleteSector(id);
@@ -117,8 +117,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // GET /api/sectors/:sectorId/kpis - Listar KPIs de um setor
-    app.get("/api/sectors/:sectorId/kpis", async (request, reply) => {
+    // GET /sectors/:sectorId/kpis - Listar KPIs de um setor
+    app.get("/sectors/:sectorId/kpis", async (request, reply) => {
         try {
             const { sectorId } = request.params as { sectorId: string };
             const kpis = await kpiService.getKPIsBySector(sectorId);
@@ -135,8 +135,8 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /api/sectors/:sectorId/kpis - Criar novo KPI
-    app.post("/api/sectors/:sectorId/kpis", async (request, reply) => {
+    // POST /sectors/:sectorId/kpis - Criar novo KPI
+    app.post("/sectors/:sectorId/kpis", async (request, reply) => {
         try {
             const { sectorId } = request.params as { sectorId: string };
             const body = request.body as any;
@@ -146,6 +146,7 @@ export async function sectorRoutes(app: FastifyInstance) {
                 unit: body.unit,
                 format: body.format,
                 sectorId,
+                isInverse: body.isInverse ?? false,
             });
 
             return reply.code(201).send({
@@ -162,8 +163,8 @@ export async function sectorRoutes(app: FastifyInstance) {
 }
 
 export async function kpiRoutes(app: FastifyInstance) {
-    // GET /api/kpis - Listar todos os KPIs
-    app.get("/api/kpis", async (request, reply) => {
+    // GET /kpis - Listar todos os KPIs
+    app.get("/kpis", async (request, reply) => {
         try {
             const kpis = await kpiService.getAllKPIs();
             return reply.send({
@@ -178,8 +179,8 @@ export async function kpiRoutes(app: FastifyInstance) {
         }
     });
 
-    // GET /api/kpis/:id - Obter KPI por ID
-    app.get("/api/kpis/:id", async (request, reply) => {
+    // GET /kpis/:id - Obter KPI por ID
+    app.get("/kpis/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const kpi = await kpiService.getKPIById(id);
@@ -203,8 +204,8 @@ export async function kpiRoutes(app: FastifyInstance) {
         }
     });
 
-    // PUT /api/kpis/:id - Atualizar KPI
-    app.put("/api/kpis/:id", async (request, reply) => {
+    // PUT /kpis/:id - Atualizar KPI
+    app.put("/kpis/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const body = request.body as any;
@@ -230,8 +231,8 @@ export async function kpiRoutes(app: FastifyInstance) {
         }
     });
 
-    // DELETE /api/kpis/:id - Deletar KPI
-    app.delete("/api/kpis/:id", async (request, reply) => {
+    // DELETE /kpis/:id - Deletar KPI
+    app.delete("/kpis/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const success = await kpiService.deleteKPI(id);

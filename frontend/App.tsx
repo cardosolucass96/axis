@@ -11,7 +11,9 @@ import { User } from './types';
 import { TrendingUp, User as UserIcon, Shield, X } from 'lucide-react';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LoadingProvider } from './contexts/LoadingContext';
+import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { LoginPage } from './pages/Login';
 
 // Google Logo Component for brand consistency
 const GoogleLogo = () => (
@@ -37,39 +39,7 @@ const AppContent: React.FC = () => {
     avatarInitials: authUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
   } : null;
 
-  // Componente de Login usando Google OAuth real
-  const LoginPage: React.FC = () => (
-    <div className="min-h-screen bg-zinc-50 dark:bg-black flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-300">
-      {/* Decorative Background Elements */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
-        <div className="absolute -top-[20%] -right-[10%] w-[50%] h-[50%] bg-amber-500 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
-        <div className="absolute top-[60%] -left-[10%] w-[40%] h-[40%] bg-zinc-400 dark:bg-zinc-800 rounded-full blur-[128px] opacity-20 dark:opacity-20"></div>
-      </div>
-
-      <div className="bg-white/80 dark:bg-zinc-900/50 backdrop-blur-lg max-w-sm w-full rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-8 flex flex-col items-center transition-colors duration-300">
-        <div className="w-16 h-16 bg-amber-500 rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_20px_rgba(245,158,11,0.4)]">
-          <TrendingUp className="w-8 h-8 text-black" />
-        </div>
-
-        <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">Axis</h1>
-        <p className="text-zinc-500 dark:text-zinc-400 text-sm mb-8 text-center">Gestão de KPIs de Alta Performance</p>
-
-        <button
-          onClick={login}
-          className="w-full bg-white hover:bg-zinc-50 text-zinc-900 font-bold py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-3 shadow-lg border border-zinc-200 active:scale-95"
-        >
-          <GoogleLogo />
-          <span>Entrar com Google</span>
-        </button>
-
-        <div className="mt-8 text-center">
-          <p className="text-xs text-zinc-600 dark:text-zinc-500">
-            &copy; {new Date().getFullYear()} Axis.
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  // LoginPage agora é importado de ./pages/Login
 
   // Componente de Acesso Negado
   const AccessDenied: React.FC = () => (
@@ -133,11 +103,13 @@ const App: React.FC = () => {
   return (
     <ThemeProvider>
       <LoadingProvider>
-        <AuthProvider>
-          <Router>
-            <AppContent />
-          </Router>
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <Router>
+              <AppContent />
+            </Router>
+          </AuthProvider>
+        </ToastProvider>
       </LoadingProvider>
     </ThemeProvider>
   );

@@ -12,7 +12,7 @@ const getApiUrl = () => {
         return "https://dev.cardosolucas.com/api";
     }
     // Fallback para localhost
-    return "http://localhost:3000";
+    return "http://localhost:3000/api";
 };
 
 const API_URL = getApiUrl();
@@ -23,13 +23,23 @@ interface User {
     name: string;
     role: "admin" | "leader";
     avatarUrl?: string;
+    sectorId?: string; // Setor vinculado ao líder
+}
+
+interface AuthResult {
+    success: boolean;
+    error?: string;
+    message?: string;
+    user?: User;
 }
 
 interface AuthContextType {
     user: User | null;
     isLoading: boolean;
     isAuthenticated: boolean;
-    login: () => void;
+    loginWithGoogle: () => void;
+    loginWithEmail: (email: string, password: string) => Promise<AuthResult>;
+    register: (name: string, email: string, password: string, confirmPassword: string) => Promise<AuthResult>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
 }
@@ -64,9 +74,94 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         refreshUser();
     }, []);
 
-    const login = () => {
+    const loginWithGoogle = () => {
+        const host = window.location.hostname;
+        
+        // Em localhost, usa dev-login automático
+        if (host === "localhost" || host === "127.0.0.1") {
+            window.location.href = `${API_URL}/auth/dev-login`;
+            return;
+        }
+        
         // Redireciona para o endpoint de login do Google
         window.location.href = `${API_URL}/auth/google`;
+    };
+
+    const loginWithEmail = async (email: string, password: string): Promise<AuthResult> => {
+        try {
+            const response = await fetch(`${API_URL}/auth/login`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                credentials: "include",
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Atualiza o usuário após login bem-sucedido
+                await refreshUser();
+                return { success: true, user: data.user };
+            }
+
+            return {
+                success: false,
+                error: data.error,
+                message: data.message
+            };
+        } catch (error) {
+            console.error("Erro no login:", error);
+            return {
+                success: false,
+                error: "NETWORK_ERROR",
+                message: "Erro de conexão. Verifique sua internet e tente novamente."
+            };
+        }
+    };
+
+    const register = async (
+        name: string, 
+        email: string, 
+        password: string, 
+        confirmPassword: string
+    ): Promise<AuthResult> => {
+        try {
+            const response = await fetch(`${API_URL}/auth/register`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                credentials: "include",
+                body: JSON.stringify({ name, email, password, confirmPassword })
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Atualiza o usuário após registro bem-sucedido
+                await refreshUser();
+                return { 
+                    success: true, 
+                    user: data.user,
+                    message: data.message 
+                };
+            }
+
+            return {
+                success: false,
+                error: data.error,
+                message: data.message
+            };
+        } catch (error) {
+            console.error("Erro no registro:", error);
+            return {
+                success: false,
+                error: "NETWORK_ERROR",
+                message: "Erro de conexão. Verifique sua internet e tente novamente."
+            };
+        }
     };
 
     const logout = async () => {
@@ -87,7 +182,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 user,
                 isLoading,
                 isAuthenticated: !!user,
-                login,
+                loginWithGoogle,
+                loginWithEmail,
+                register,
                 logout,
                 refreshUser
             }}

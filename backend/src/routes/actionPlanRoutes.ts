@@ -6,8 +6,8 @@ const actionPlanService = new ActionPlanService();
 const rootCauseRepository = new RootCauseRepository();
 
 export async function actionPlanRoutes(fastify: FastifyInstance) {
-  // GET /api/action-plans - Listar todos os planos (com filtros)
-  fastify.get("/api/action-plans", async (request, reply) => {
+  // GET /action-plans - Listar todos os planos (com filtros)
+  fastify.get("/action-plans", async (request, reply) => {
     try {
       const { status, sectorId, month } = request.query as {
         status?: string;
@@ -30,8 +30,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /api/action-plans/:id - Obter detalhes de um plano
-  fastify.get("/api/action-plans/:id", async (request, reply) => {
+  // GET /action-plans/:id - Obter detalhes de um plano
+  fastify.get("/action-plans/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const plan = await actionPlanService.findById(id);
@@ -52,8 +52,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /api/entries/:entryId/action-plans - Criar plano de ação para uma entry
-  fastify.post("/api/entries/:entryId/action-plans", async (request, reply) => {
+  // POST /entries/:entryId/action-plans - Criar plano de ação para uma entry
+  fastify.post("/entries/:entryId/action-plans", async (request, reply) => {
     try {
       const { entryId } = request.params as { entryId: string };
       const planData = {
@@ -71,8 +71,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PUT /api/action-plans/:id - Atualizar plano de ação
-  fastify.put("/api/action-plans/:id", async (request, reply) => {
+  // PUT /action-plans/:id - Atualizar plano de ação
+  fastify.put("/action-plans/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const planData = request.body as any;
@@ -94,8 +94,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PATCH /api/action-plans/:id/status - Mudar status do plano
-  fastify.patch("/api/action-plans/:id/status", async (request, reply) => {
+  // PATCH /action-plans/:id/status - Mudar status do plano
+  fastify.patch("/action-plans/:id/status", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const { status } = request.body as { status: string };
@@ -118,8 +118,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /api/action-plans/:id - Deletar plano de ação
-  fastify.delete("/api/action-plans/:id", async (request, reply) => {
+  // DELETE /action-plans/:id - Deletar plano de ação
+  fastify.delete("/action-plans/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const success = await actionPlanService.delete(id);
@@ -143,8 +143,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /api/entries/:entryId/causes - Listar causas de uma entry
-  fastify.get("/api/entries/:entryId/causes", async (request, reply) => {
+  // GET /entries/:entryId/causes - Listar causas de uma entry
+  fastify.get("/entries/:entryId/causes", async (request, reply) => {
     try {
       const { entryId } = request.params as { entryId: string };
       const causes = await rootCauseRepository.findByEntryId(entryId);
@@ -157,8 +157,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /api/entries/:entryId/causes - Adicionar causa
-  fastify.post("/api/entries/:entryId/causes", async (request, reply) => {
+  // POST /entries/:entryId/causes - Adicionar causa
+  fastify.post("/entries/:entryId/causes", async (request, reply) => {
     try {
       const { entryId } = request.params as { entryId: string };
       const causeData = {
@@ -176,8 +176,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PUT /api/causes/:id - Atualizar causa
-  fastify.put("/api/causes/:id", async (request, reply) => {
+  // PUT /causes/:id - Atualizar causa
+  fastify.put("/causes/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const causeData = request.body as any;
@@ -199,8 +199,8 @@ export async function actionPlanRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /api/causes/:id - Deletar causa
-  fastify.delete("/api/causes/:id", async (request, reply) => {
+  // DELETE /causes/:id - Deletar causa
+  fastify.delete("/causes/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const success = await rootCauseRepository.delete(id);

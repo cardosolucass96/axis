@@ -363,6 +363,41 @@ export const dataService = {
     }
   },
 
+  // ===== MONTHLY TARGETS =====
+  getMonthlyTargets: async (sectorId?: string, month?: string): Promise<any[]> => {
+    try {
+      const response = await api.monthlyTargets.getAll({ sectorId, month });
+      return response || [];
+    } catch (error) {
+      console.error('Erro ao buscar metas mensais:', error);
+      return [];
+    }
+  },
+
+  setMonthlyTargetAndDistribute: async (
+    sectorId: string,
+    kpiId: string,
+    month: string,
+    target: number
+  ): Promise<any> => {
+    try {
+      const response = await api.monthlyTargets.distribute({
+        sectorId,
+        kpiId,
+        month,
+        target
+      });
+      
+      // Invalidar cache de entries para forçar recarregamento
+      cachedEntries = null;
+      
+      return response;
+    } catch (error) {
+      console.error('Erro ao distribuir meta mensal:', error);
+      throw error;
+    }
+  },
+
   // ===== CACHE MANAGEMENT =====
   invalidateCache: () => {
     cachedUsers = null;

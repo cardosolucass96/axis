@@ -5,28 +5,75 @@ import { PlanStatus, KpiEntry, FiveWTwoH, MONTHS, WEEKS, User, Sector } from '..
 import { Edit, Trash2, X, Save, Calendar, ChevronDown, ChevronRight, CheckCircle2, AlertCircle, Clock, PauseCircle, LayoutList, KanbanSquare, ArrowRight, Filter, GripVertical, Download, User as UserIcon } from 'lucide-react';
 import { Button } from '../components/Button';
 import { FiveWTwoHInput } from '../components/FiveWTwoH';
+import { PageHeader, EmptyState, FilterBar, ViewSwitcher, Modal, Badge } from '../components/ui';
+import { ds } from '../styles/design-tokens';
+import { getWeeksForMonth, isSameWeek, getCurrentMonth, getCurrentWeek } from '../utils/weekCalculator';
+import { formatDateToBR } from '../utils/dateFormatter';
+import { useAuth } from '../contexts/AuthContext';
 
 export const ActionPlansPage: React.FC = () => {
+  const { user } = useAuth();
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
   const [plans, setPlans] = useState<KpiEntry[]>([]);
   const [editingPlan, setEditingPlan] = useState<KpiEntry | null>(null);
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [initialFiltersSet, setInitialFiltersSet] = useState(false);
 
   // Drag and Drop States
   const [draggedPlanId, setDraggedPlanId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<PlanStatus | null>(null);
 
-  // Filters
-  const [filterMonth, setFilterMonth] = useState<string>('Todos');
+  // Filters - Inicializar com mês e semana atuais
+  const currentMonth = getCurrentMonth();
+  const [filterMonth, setFilterMonth] = useState<string>(currentMonth);
   const [filterWeek, setFilterWeek] = useState<string>('Todas');
+  // Filtro de líder: admins veem todos, líderes veem só seus planos
   const [filterLeader, setFilterLeader] = useState<string>('Todos');
+
+  // Definir filtros iniciais quando usuário estiver disponível
+  useEffect(() => {
+    if (user && !initialFiltersSet) {
+      // Definir semana atual
+      const currentWeek = getCurrentWeek(currentMonth);
+      if (currentWeek) {
+        setFilterWeek(currentWeek);
+      }
+      
+      // Líder: pré-selecionar seu próprio nome
+      // Admin: manter "Todos" para ver todos os planos
+      if (user.role === 'leader' && user.name) {
+        setFilterLeader(user.name);
+      }
+      
+      setInitialFiltersSet(true);
+    }
+  }, [user, initialFiltersSet, currentMonth]);
+
+  // Calcular semanas disponíveis baseado no mês selecionado
+  const availableWeeks = useMemo(() => {
+    if (filterMonth === 'Todos') {
+      return WEEKS; // Retornar todas as semanas padrão
+    }
+    const currentYear = new Date().getFullYear();
+    return getWeeksForMonth(filterMonth, currentYear);
+  }, [filterMonth]);
+
+  // Atualizar semana quando o mês mudar
+  useEffect(() => {
+    if (filterMonth !== 'Todos' && availableWeeks.length > 0) {
+      // Se a semana atual não está nas semanas disponíveis, resetar para "Todas"
+      if (filterWeek !== 'Todas' && !availableWeeks.includes(filterWeek)) {
+        setFilterWeek('Todas');
+      }
+    }
+  }, [filterMonth, availableWeeks, filterWeek]);
 
   // Load data on mount
   useEffect(() => {
     loadData();
-  }, []);
+  }, [user]);
 
   const loadData = async () => {
     try {
@@ -36,7 +83,13 @@ export const ActionPlansPage: React.FC = () => {
         dataService.getUsers(),
         dataService.getSectors()
       ]);
-      setPlans(plansData);
+      
+      // Se for líder, filtrar apenas planos do seu setor
+      const filteredPlans = user?.role === 'leader' && user?.sectorId
+        ? plansData.filter(plan => plan.sectorId === user.sectorId)
+        : plansData;
+      
+      setPlans(filteredPlans);
       setAvailableUsers(usersData);
       setSectors(sectorsData);
     } catch (error) {
@@ -151,7 +204,7 @@ export const ActionPlansPage: React.FC = () => {
   const filteredPlans = useMemo(() => {
     return plans.filter(plan => {
       const matchMonth = filterMonth === 'Todos' || plan.month === filterMonth;
-      const matchWeek = filterWeek === 'Todas' || plan.week === filterWeek;
+      const matchWeek = filterWeek === 'Todas' || isSameWeek(plan.week, filterWeek);
       const matchLeader = filterLeader === 'Todos' || plan.actionPlan?.who === filterLeader;
       return matchMonth && matchWeek && matchLeader;
     });
@@ -248,123 +301,74 @@ export const ActionPlansPage: React.FC = () => {
     return counts;
   };
 
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return '';
-    // Check if it matches YYYY-MM-DD
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [year, month, day] = dateStr.split('-');
-      return `${day}/${month}/${year}`;
-    }
-    // Fallback for legacy text
-    return dateStr;
-  };
+  // Usar função utilitária de formatação de data
+  const formatDate = formatDateToBR;
 
   return (
     <div className="space-y-6 animate-fade-in relative pb-20 h-full flex flex-col">
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Gestão de Planos de Ação</h1>
-          <p className="text-zinc-500 dark:text-zinc-400">Acompanhamento tático e resolução de problemas.</p>
-        </div>
+        <PageHeader
+          title="Gestão de Planos de Ação"
+          subtitle="Acompanhamento tático e resolução de problemas."
+        />
 
         <div className="flex flex-col lg:flex-row gap-3 w-full xl:w-auto items-start lg:items-center">
 
           {/* Enhanced Filter Bar */}
-          <div className="flex bg-white dark:bg-zinc-900 rounded-lg border border-zinc-300 dark:border-zinc-800 shadow-sm p-1 gap-1 items-center overflow-x-auto max-w-full">
-            <div className="px-3 py-1.5 text-zinc-400 border-r border-zinc-200 dark:border-zinc-800 flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              <span className="text-xs font-bold uppercase tracking-wider hidden md:inline">Filtros</span>
-            </div>
+          <FilterBar
+            icon={<Filter className="w-4 h-4" />}
+            filters={[
+              {
+                id: 'leader',
+                value: filterLeader,
+                options: [{ value: 'Todos', label: 'Todos os Líderes' }, ...availableUsers.map(u => ({ value: u.name, label: u.name.split(' ')[0] }))],
+                onChange: setFilterLeader
+              },
+              {
+                id: 'month',
+                value: filterMonth,
+                options: [{ value: 'Todos', label: 'Todos os Meses' }, ...MONTHS.map(m => ({ value: m, label: m }))],
+                onChange: setFilterMonth
+              },
+              {
+                id: 'week',
+                value: filterWeek,
+                options: [{ value: 'Todas', label: 'Todas as Semanas' }, ...availableWeeks.map(w => ({ value: w, label: w }))],
+                onChange: setFilterWeek
+              }
+            ]}
+            hasActiveFilters={hasActiveFilters}
+            onClear={clearFilters}
+          />
 
-            {/* Leader Filter */}
-            <select
-              value={filterLeader}
-              onChange={(e) => setFilterLeader(e.target.value)}
-              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-40 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-              style={{ backgroundImage: 'none' }}
-            >
-              <option value="Todos">Todos os Líderes</option>
-              {availableUsers.map(u => <option key={u.id} value={u.name}>{u.name.split(' ')[0]}</option>)}
-            </select>
-
-            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
-
-            {/* Month Filter */}
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-              style={{ backgroundImage: 'none' }}
-            >
-              <option value="Todos">Todos os Meses</option>
-              {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-
-            <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-800 mx-1"></div>
-
-            {/* Week Filter */}
-            <select
-              value={filterWeek}
-              onChange={(e) => setFilterWeek(e.target.value)}
-              className="bg-transparent border-none text-sm font-bold text-zinc-700 dark:text-zinc-200 focus:ring-0 cursor-pointer py-1.5 pl-2 pr-8 w-32 md:w-36 hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-md"
-              style={{ backgroundImage: 'none' }}
-            >
-              <option value="Todas">Todas as Semanas</option>
-              {WEEKS.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-
-            {/* Clear Filters Button */}
-            {hasActiveFilters && (
-              <button
-                onClick={clearFilters}
-                className="ml-1 p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 rounded-md transition-colors"
-                title="Limpar filtros"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <div className="hidden lg:block w-px h-8 bg-zinc-300 dark:bg-zinc-700"></div>
+          <div className="hidden lg:block w-px h-8 bg-zinc-200 dark:bg-zinc-700"></div>
 
           {/* Actions */}
           <div className="flex gap-2 w-full lg:w-auto justify-end">
-            <Button variant="outline" onClick={handleExport} title="Exportar para Excel/CSV" className="px-3 bg-white dark:bg-zinc-900 dark:border-zinc-700 dark:text-zinc-300 dark:hover:text-amber-500">
+            <Button variant="outline" onClick={handleExport} title="Exportar para Excel/CSV" size="sm">
               <Download className="w-4 h-4" />
             </Button>
 
             {/* View Switcher */}
-            <div className="flex bg-zinc-200 dark:bg-zinc-800 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white dark:bg-zinc-600 text-amber-700 dark:text-amber-400 shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'}`}
-              >
-                <LayoutList className="w-4 h-4" /> <span className="hidden sm:inline">Lista</span>
-              </button>
-              <button
-                onClick={() => setViewMode('kanban')}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'kanban' ? 'bg-white dark:bg-zinc-600 text-amber-700 dark:text-amber-400 shadow-sm' : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'}`}
-              >
-                <KanbanSquare className="w-4 h-4" /> <span className="hidden sm:inline">Kanban</span>
-              </button>
-            </div>
+            <ViewSwitcher
+              views={[
+                { id: 'list' as const, label: 'Lista', icon: <LayoutList className="w-4 h-4" /> },
+                { id: 'kanban' as const, label: 'Kanban', icon: <KanbanSquare className="w-4 h-4" /> }
+              ]}
+              activeView={viewMode}
+              onChange={setViewMode}
+            />
           </div>
         </div>
       </div>
 
       {filteredPlans.length === 0 ? (
-        <div className="bg-white dark:bg-zinc-900 p-12 rounded-xl border border-zinc-200 dark:border-zinc-800 text-center shadow-sm">
-          <div className="mx-auto w-16 h-16 bg-zinc-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mb-4">
-            <Filter className="w-8 h-8 text-zinc-400" />
-          </div>
-          <h3 className="text-lg font-medium text-zinc-900 dark:text-white">Nenhum plano encontrado</h3>
-          <p className="text-zinc-500 dark:text-zinc-400">Tente ajustar os filtros para encontrar o que procura.</p>
-          {hasActiveFilters && (
-            <Button variant="outline" onClick={clearFilters} className="mt-4">
-              Limpar Filtros
-            </Button>
-          )}
-        </div>
+        <EmptyState
+          icon={<Filter className="w-8 h-8 text-zinc-400" />}
+          title="Nenhum plano encontrado"
+          description="Tente ajustar os filtros para encontrar o que procura."
+          action={hasActiveFilters && <Button variant="outline" onClick={clearFilters}>Limpar Filtros</Button>}
+        />
       ) : (
         <>
           {/* --- KANBAN VIEW --- */}
@@ -411,9 +415,9 @@ export const ActionPlansPage: React.FC = () => {
                               draggable
                               onDragStart={(e) => handleDragStart(e, entry.id)}
                               className={`
-                                    bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-800 group relative
+                                    bg-white dark:bg-zinc-900 p-4 rounded-lg shadow-sm border border-zinc-200 dark:border-zinc-700 group relative
                                     cursor-move select-none transition-all duration-200
-                                    ${isDragging ? 'opacity-50 scale-95 shadow-none' : 'hover:shadow-md hover:border-amber-300 dark:hover:border-amber-700'}
+                                    ${isDragging ? 'opacity-50 scale-95 shadow-none' : 'hover:shadow-md hover:border-amber-400 dark:hover:border-amber-600'}
                                   `}
                             >
                               {/* Grip Handle for affordance */}
@@ -455,7 +459,7 @@ export const ActionPlansPage: React.FC = () => {
                               </div>
 
                               {/* Quick Status Change Footer */}
-                              <div className="mt-3 pt-3 border-t border-zinc-50 dark:border-zinc-800 flex justify-between items-center pl-2">
+                              <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-700 flex justify-between items-center pl-2">
                                 <span className="text-[10px] text-zinc-400">Mover para:</span>
                                 <div className="flex gap-1">
                                   {(Object.keys(statusConfig) as PlanStatus[]).filter(s => s !== status).map(s => (
@@ -498,7 +502,7 @@ export const ActionPlansPage: React.FC = () => {
                     const summary = getStatusSummary(weekGroup.items);
 
                     return (
-                      <div key={weekGroup.week} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden transition-all duration-300">
+                      <div key={weekGroup.week} className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm overflow-hidden transition-all duration-300">
                         <div
                           className="bg-zinc-50 dark:bg-zinc-800 px-6 py-4 flex flex-col md:flex-row md:items-center justify-between cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
                           onClick={() => toggleGroup(groupKey)}
@@ -517,11 +521,11 @@ export const ActionPlansPage: React.FC = () => {
                         </div>
 
                         {isExpanded && (
-                          <div className="overflow-x-auto border-t border-zinc-100 dark:border-zinc-800">
+                          <div className="overflow-x-auto border-t border-zinc-200 dark:border-zinc-700">
                             <table className="w-full text-sm text-left">
-                              <thead className="bg-white dark:bg-zinc-950 text-zinc-500 font-medium border-b border-zinc-100 dark:border-zinc-800 text-xs uppercase tracking-wider">
+                              <thead className="bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-medium border-b border-zinc-200 dark:border-zinc-700 text-xs uppercase tracking-wider">
                                 <tr>
-                                  <th className="px-6 py-3 w-32">Status</th>
+                                  <th className="px-6 py-3 w-44">Status</th>
                                   <th className="px-6 py-3">O que (What)</th>
                                   <th className="px-6 py-3">Quem (Who)</th>
                                   <th className="px-6 py-3">KPI / Setor</th>
@@ -603,58 +607,51 @@ export const ActionPlansPage: React.FC = () => {
       )}
 
       {/* Edit Modal Overlay */}
-      {editingPlan && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto animate-fade-in border border-zinc-200 dark:border-zinc-800">
-            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center sticky top-0 bg-white dark:bg-zinc-900 z-10">
-              <div>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-white">Editar Plano de Ação</h2>
-                <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {sectors.find(s => s.id === editingPlan.sectorId)?.name} • {sectors.find(s => s.id === editingPlan.sectorId)?.kpis.find(k => k.id === editingPlan.kpiId)?.name}
-                </p>
+      <Modal
+        isOpen={!!editingPlan}
+        onClose={() => setEditingPlan(null)}
+        title="Editar Plano de Ação"
+        subtitle={editingPlan ? `${sectors.find(s => s.id === editingPlan.sectorId)?.name} • ${sectors.find(s => s.id === editingPlan.sectorId)?.kpis.find(k => k.id === editingPlan.kpiId)?.name}` : ''}
+        size="xl"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setEditingPlan(null)}>Cancelar</Button>
+            <Button onClick={handleSaveEdit}>
+              <Save className="w-4 h-4" /> Salvar Alterações
+            </Button>
+          </>
+        }
+      >
+        {editingPlan && (
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Status Atual</label>
+              <div className="flex gap-2 flex-wrap">
+                {(Object.keys(statusConfig) as PlanStatus[]).map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setEditingPlan({ ...editingPlan, actionPlanStatus: status })}
+                    className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all flex items-center gap-2 ${editingPlan.actionPlanStatus === status
+                      ? `${statusConfig[status].bg.replace('50', '100')} ${statusConfig[status].darkBg} ${statusConfig[status].color} ${statusConfig[status].border} ring-2 ring-offset-1 ring-amber-200 dark:ring-amber-900`
+                      : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                      }`}
+                  >
+                    {/* @ts-ignore */}
+                    {React.createElement(statusConfig[status].icon, { className: "w-4 h-4" })}
+                    {statusConfig[status].label}
+                  </button>
+                ))}
               </div>
-              <button onClick={() => setEditingPlan(null)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
-                <X className="w-6 h-6" />
-              </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">Status Atual</label>
-                <div className="flex gap-2">
-                  {(Object.keys(statusConfig) as PlanStatus[]).map((status) => (
-                    <button
-                      key={status}
-                      onClick={() => setEditingPlan({ ...editingPlan, actionPlanStatus: status })}
-                      className={`px-4 py-2 rounded-lg text-sm font-bold border transition-all flex items-center gap-2 ${editingPlan.actionPlanStatus === status
-                        ? `${statusConfig[status].bg.replace('50', '100')} ${statusConfig[status].darkBg} ${statusConfig[status].color} ${statusConfig[status].border} ring-2 ring-offset-1 ring-amber-200 dark:ring-amber-900`
-                        : 'bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'
-                        }`}
-                    >
-                      {/* @ts-ignore */}
-                      {React.createElement(statusConfig[status].icon, { className: "w-4 h-4" })}
-                      {statusConfig[status].label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <FiveWTwoHInput
-                data={editingPlan.actionPlan}
-                onChange={updateEditForm}
-                availableUsers={availableUsers}
-              />
-            </div>
-
-            <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 flex justify-end gap-3 rounded-b-xl sticky bottom-0">
-              <Button variant="outline" onClick={() => setEditingPlan(null)}>Cancelar</Button>
-              <Button onClick={handleSaveEdit} className="flex items-center gap-2">
-                <Save className="w-4 h-4" /> Salvar Alterações
-              </Button>
-            </div>
+            <FiveWTwoHInput
+              data={editingPlan.actionPlan}
+              onChange={updateEditForm}
+              availableUsers={availableUsers}
+            />
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </div>
   );
 };

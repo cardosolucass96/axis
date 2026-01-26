@@ -2,6 +2,7 @@ import { Lucia, TimeSpan } from "lucia";
 import { BetterSqlite3Adapter } from "@lucia-auth/adapter-sqlite";
 import Database from "better-sqlite3";
 import path from "path";
+import bcrypt from "bcryptjs";
 
 // Usa o mesmo banco de dados principal (axis.db)
 const dbPath = path.join(process.cwd(), "axis.db");
@@ -16,6 +17,8 @@ authDb.exec(`
         role TEXT DEFAULT 'leader',
         avatar_url TEXT,
         google_id TEXT UNIQUE,
+        password_hash TEXT,
+        email_verified INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT (unixepoch()),
         updated_at INTEGER DEFAULT (unixepoch())
     );
@@ -28,6 +31,26 @@ authDb.exec(`
 
     CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(user_id);
 `);
+
+// Adiciona coluna password_hash se não existir (migração)
+try {
+    authDb.exec(`ALTER TABLE user ADD COLUMN password_hash TEXT`);
+} catch (e) {
+    // Coluna já existe, ignora
+}
+
+try {
+    authDb.exec(`ALTER TABLE user ADD COLUMN email_verified INTEGER DEFAULT 0`);
+} catch (e) {
+    // Coluna já existe, ignora
+}
+
+// Adiciona coluna sector_id para vincular líder ao setor
+try {
+    authDb.exec(`ALTER TABLE user ADD COLUMN sector_id TEXT`);
+} catch (e) {
+    // Coluna já existe, ignora
+}
 
 // Configura adapter do Lucia
 const adapter = new BetterSqlite3Adapter(authDb, {
@@ -54,7 +77,8 @@ export const lucia = new Lucia(adapter, {
             name: attributes.name,
             role: attributes.role,
             avatarUrl: attributes.avatar_url,
-            googleId: attributes.google_id
+            googleId: attributes.google_id,
+            sectorId: attributes.sector_id
         };
     }
 });
@@ -73,6 +97,50 @@ interface DatabaseUserAttributes {
     role: string;
     avatar_url: string | null;
     google_id: string | null;
+    password_hash: string | null;
+    email_verified: number;
+    sector_id: string | null;
+}
+
+// Constantes para validação
+const SALT_ROUNDS = 12;
+const PASSWORD_MIN_LENGTH = 8;
+const ALLOWED_DOMAIN = "@grupovorp.com";
+
+// Funções de hash de senha
+export async function hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, SALT_ROUNDS);
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+    return bcrypt.compare(password, hash);
+}
+
+// Validação de email
+export function isValidEmail(email: string): boolean {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+}
+
+export function isAllowedDomain(email: string): boolean {
+    return email.endsWith(ALLOWED_DOMAIN);
+}
+
+// Validação de senha
+export function validatePassword(password: string): { valid: boolean; message?: string } {
+    if (password.length < PASSWORD_MIN_LENGTH) {
+        return { valid: false, message: `A senha deve ter pelo menos ${PASSWORD_MIN_LENGTH} caracteres` };
+    }
+    if (!/[A-Z]/.test(password)) {
+        return { valid: false, message: "A senha deve conter pelo menos uma letra maiúscula" };
+    }
+    if (!/[a-z]/.test(password)) {
+        return { valid: false, message: "A senha deve conter pelo menos uma letra minúscula" };
+    }
+    if (!/[0-9]/.test(password)) {
+        return { valid: false, message: "A senha deve conter pelo menos um número" };
+    }
+    return { valid: true };
 }
 
 // Funções auxiliares para gerenciar usuários
@@ -83,12 +151,24 @@ export function createUser(data: {
     role?: string;
     avatarUrl?: string;
     googleId?: string;
+    passwordHash?: string;
 }) {
     const stmt = authDb.prepare(`
-        INSERT INTO user (id, email, name, role, avatar_url, google_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO user (id, email, name, role, avatar_url, google_id, password_hash, email_verified)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(data.id, data.email, data.name, data.role || "leader", data.avatarUrl || null, data.googleId || null);
+    // Se tem google_id, email já está verificado
+    const emailVerified = data.googleId ? 1 : 0;
+    stmt.run(
+        data.id, 
+        data.email, 
+        data.name, 
+        data.role || "leader", 
+        data.avatarUrl || null, 
+        data.googleId || null,
+        data.passwordHash || null,
+        emailVerified
+    );
 }
 
 export function getUserByGoogleId(googleId: string) {
@@ -107,6 +187,21 @@ export function getUserById(id: string) {
 }
 
 export function updateUserGoogleId(userId: string, googleId: string) {
-    const stmt = authDb.prepare("UPDATE user SET google_id = ?, updated_at = unixepoch() WHERE id = ?");
+    const stmt = authDb.prepare("UPDATE user SET google_id = ?, email_verified = 1, updated_at = unixepoch() WHERE id = ?");
     stmt.run(googleId, userId);
+}
+
+export function updateUserPassword(userId: string, passwordHash: string) {
+    const stmt = authDb.prepare("UPDATE user SET password_hash = ?, updated_at = unixepoch() WHERE id = ?");
+    stmt.run(passwordHash, userId);
+}
+
+export function userHasPassword(email: string): boolean {
+    const user = getUserByEmail(email);
+    return !!(user && user.password_hash);
+}
+
+export function userHasGoogleAuth(email: string): boolean {
+    const user = getUserByEmail(email);
+    return !!(user && user.google_id);
 }

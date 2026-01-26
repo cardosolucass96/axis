@@ -219,6 +219,20 @@ export const api = {
             request<any>("GET", "/dashboard/root-cause-cloud", { query }),
     },
 
+    // ===== MONTHLY TARGETS =====
+    monthlyTargets: {
+        getAll: (query?: { sectorId?: string; kpiId?: string; month?: string }) =>
+            request<any[]>("GET", "/monthly-targets", { query }),
+        getById: (id: string) => request<any>("GET", `/monthly-targets/${id}`),
+        create: (target: any) =>
+            request<any>("POST", "/monthly-targets", { body: target }),
+        update: (id: string, target: any) =>
+            request<any>("PUT", `/monthly-targets/${id}`, { body: target }),
+        delete: (id: string) => request<void>("DELETE", `/monthly-targets/${id}`),
+        distribute: (data: { sectorId: string; kpiId: string; month: string; target: number }) =>
+            request<any>("POST", "/monthly-targets/distribute", { body: data }),
+    },
+
     // ===== HEALTH =====
     health: () => request<any>("GET", "/health"),
 };

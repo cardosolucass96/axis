@@ -4,8 +4,8 @@ import { UserService } from "../services/UserService";
 const userService = new UserService();
 
 export async function userRoutes(app: FastifyInstance) {
-    // GET /api/users - Listar todos os usuários
-    app.get("/api/users", async (request, reply) => {
+    // GET /users - Listar todos os usuários
+    app.get("/users", async (request, reply) => {
         try {
             const users = await userService.getAllUsers();
             return reply.send({
@@ -20,8 +20,8 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // GET /api/users/:id - Obter usuário por ID
-    app.get("/api/users/:id", async (request, reply) => {
+    // GET /users/:id - Obter usuário por ID
+    app.get("/users/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const user = await userService.getUserById(id);
@@ -45,8 +45,8 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /api/users - Criar novo usuário
-    app.post("/api/users", async (request, reply) => {
+    // POST /users - Criar novo usuário
+    app.post("/users", async (request, reply) => {
         try {
             const body = request.body as any;
             const user = await userService.createUser({
@@ -68,8 +68,8 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // PUT /api/users/:id - Atualizar usuário
-    app.put("/api/users/:id", async (request, reply) => {
+    // PUT /users/:id - Atualizar usuário
+    app.put("/users/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const body = request.body as any;
@@ -95,8 +95,8 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // DELETE /api/users/:id - Deletar usuário
-    app.delete("/api/users/:id", async (request, reply) => {
+    // DELETE /users/:id - Deletar usuário
+    app.delete("/users/:id", async (request, reply) => {
         try {
             const { id } = request.params as { id: string };
             const success = await userService.deleteUser(id);
@@ -120,8 +120,8 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /api/users/:userId/link-sector - Vincular usuário a setor
-    app.post("/api/users/:userId/link-sector", async (request, reply) => {
+    // POST /users/:userId/link-sector - Vincular usuário a setor
+    app.post("/users/:userId/link-sector", async (request, reply) => {
         try {
             const { userId } = request.params as { userId: string };
             const { sectorId } = request.body as { sectorId: string };

@@ -4,8 +4,8 @@ import { KpiEntryService } from "../services/KpiEntryService.js";
 const kpiEntryService = new KpiEntryService();
 
 export async function entryRoutes(fastify: FastifyInstance) {
-  // GET /api/entries - Listar todas as entradas (com filtros: sectorId, month, week)
-  fastify.get("/api/entries", async (request, reply) => {
+  // GET /entries - Listar todas as entradas (com filtros: sectorId, month, week)
+  fastify.get("/entries", async (request, reply) => {
     try {
       const { sectorId, month, week, kpiId } = request.query as {
         sectorId?: string;
@@ -30,8 +30,8 @@ export async function entryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /api/entries/:id - Obter detalhes de uma entrada
-  fastify.get("/api/entries/:id", async (request, reply) => {
+  // GET /entries/:id - Obter detalhes de uma entrada
+  fastify.get("/entries/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const entry = await kpiEntryService.findById(id);
@@ -52,8 +52,8 @@ export async function entryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // POST /api/entries - Criar nova entrada
-  fastify.post("/api/entries", async (request, reply) => {
+  // POST /entries - Criar nova entrada
+  fastify.post("/entries", async (request, reply) => {
     try {
       const entryData = request.body as any;
       const entry = await kpiEntryService.create(entryData);
@@ -66,8 +66,8 @@ export async function entryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // PUT /api/entries/:id - Atualizar entrada
-  fastify.put("/api/entries/:id", async (request, reply) => {
+  // PUT /entries/:id - Atualizar entrada
+  fastify.put("/entries/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const entryData = request.body as any;
@@ -92,8 +92,8 @@ export async function entryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // DELETE /api/entries/:id - Deletar entrada
-  fastify.delete("/api/entries/:id", async (request, reply) => {
+  // DELETE /entries/:id - Deletar entrada
+  fastify.delete("/entries/:id", async (request, reply) => {
     try {
       const { id } = request.params as { id: string };
       const success = await kpiEntryService.delete(id);
@@ -117,8 +117,8 @@ export async function entryRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // GET /api/sectors/:sectorId/entries - Listar entradas de um setor
-  fastify.get("/api/sectors/:sectorId/entries", async (request, reply) => {
+  // GET /sectors/:sectorId/entries - Listar entradas de um setor
+  fastify.get("/sectors/:sectorId/entries", async (request, reply) => {
     try {
       const { sectorId } = request.params as { sectorId: string };
       const { month, week } = request.query as {

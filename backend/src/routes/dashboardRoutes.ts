@@ -9,7 +9,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna o índice de saúde dos KPIs (onTrack, warning, critical)
      * Query params: month, week (opcionais)
      */
-    fastify.get("/api/dashboard/health-index", async (request, reply) => {
+    fastify.get("/dashboard/health-index", async (request, reply) => {
         try {
             const { month, week } = request.query as {
                 month?: string;
@@ -31,7 +31,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna análise de tendência histórica (performance média por mês)
      * Query params: months (número de meses, padrão 6)
      */
-    fastify.get("/api/dashboard/trend-analysis", async (request, reply) => {
+    fastify.get("/dashboard/trend-analysis", async (request, reply) => {
         try {
             const { months } = request.query as { months?: string };
             const monthsNum = months ? parseInt(months) : 6;
@@ -51,7 +51,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna dados para ponte financeira (waterfall chart)
      * Query params: month, week (opcionais)
      */
-    fastify.get("/api/dashboard/financial-bridge", async (request, reply) => {
+    fastify.get("/dashboard/financial-bridge", async (request, reply) => {
         try {
             const { month, week } = request.query as {
                 month?: string;
@@ -73,7 +73,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna estatísticas de planos de ação por status
      * Query params: month (opcional)
      */
-    fastify.get("/api/dashboard/plan-stats", async (request, reply) => {
+    fastify.get("/dashboard/plan-stats", async (request, reply) => {
         try {
             const { month } = request.query as { month?: string };
 
@@ -92,7 +92,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna distribuição de planos por tempo sem atualização
      * Query params: month (opcional)
      */
-    fastify.get("/api/dashboard/aging-plans", async (request, reply) => {
+    fastify.get("/dashboard/aging-plans", async (request, reply) => {
         try {
             const { month } = request.query as { month?: string };
 
@@ -111,7 +111,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
      * Retorna as palavras mais frequentes nas causas raiz
      * Query params: month (opcional)
      */
-    fastify.get("/api/dashboard/root-cause-cloud", async (request, reply) => {
+    fastify.get("/dashboard/root-cause-cloud", async (request, reply) => {
         try {
             const { month } = request.query as { month?: string };
 

@@ -27,10 +27,11 @@ export interface KpiEntry {
   kpiId: string;
   month: string; // e.g., "Outubro 2023"
   week: string; // e.g., "Semana 1"
-  target: number;
-  realized: number;
+  target: number | null;
+  realized: number | null; // null = não preenchido, 0 = valor zero preenchido
   gap: number;
   gapPercentage: number;
+  isCompleted?: boolean; // true quando o realizado foi preenchido e a meta está "congelada"
   causes?: string[]; // 5 Whys
   actionPlan?: FiveWTwoH;
   actionPlanStatus?: PlanStatus;
@@ -42,6 +43,7 @@ export interface KPI {
   name: string;
   unit: 'currency' | 'number' | 'percent';
   format: string;
+  isInverse?: boolean; // true = meta de teto (máximo permitido), false = meta de piso (mínimo a atingir)
 }
 
 export interface Sector {
@@ -51,17 +53,25 @@ export interface Sector {
 }
 
 export const MONTHS = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
   'Setembro',
   'Outubro',
   'Novembro',
-  'Dezembro',
-  'Janeiro'
+  'Dezembro'
 ];
 
+// WEEKS genérico - usado apenas como fallback, semanas reais são geradas dinamicamente
 export const WEEKS = [
-  'Semana 1',
-  'Semana 2',
-  'Semana 3',
-  'Semana 4',
-  'Mês Geral'
+  'Sem1',
+  'Sem2', 
+  'Sem3',
+  'Sem4',
+  'Sem5'
 ];

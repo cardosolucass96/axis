@@ -23,6 +23,7 @@ export class KPIService {
         unit: "currency" | "number" | "percent";
         format: string;
         sectorId: string;
+        isInverse?: boolean;
     }): Promise<KPI> {
         // Verify sector exists
         const sector = await this.sectorRepository.findById(data.sectorId);
@@ -30,7 +31,10 @@ export class KPIService {
             throw new Error("Setor não encontrado");
         }
 
-        return await this.kpiRepository.create(data);
+        return await this.kpiRepository.create({
+            ...data,
+            isInverse: data.isInverse ?? false
+        });
     }
 
     async updateKPI(

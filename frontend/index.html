@@ -3,6 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>Axis - Gestão de KPIs</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -29,6 +30,19 @@
       
       body {
         font-family: 'Inter', sans-serif;
+      }
+      
+      /* CSS Variables para temas - tooltips e outros elementos dinâmicos */
+      :root {
+        --tooltip-bg: #ffffff;
+        --tooltip-text: #18181b;
+        --tooltip-border: #e4e4e7;
+      }
+      
+      .dark {
+        --tooltip-bg: #18181b;
+        --tooltip-text: #ffffff;
+        --tooltip-border: #3f3f46;
       }
       
       .animate-fade-in {

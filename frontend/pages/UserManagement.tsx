@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { User, Sector } from '../types';
 import { dataService } from '../src/services/dataService';
 import { Button } from '../components/Button';
+import { PageHeader, LoadingSpinner, Modal, Input, Select, Badge, IconButton } from '../components/ui';
+import { ds } from '../styles/design-tokens';
 import { Trash2, Edit, UserPlus, Shield, User as UserIcon } from 'lucide-react';
 
 export const UserManagementPage: React.FC = () => {
@@ -67,31 +69,24 @@ export const UserManagementPage: React.FC = () => {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500 mx-auto mb-4"></div>
-          <p className="text-zinc-500 dark:text-zinc-400">Carregando usuários...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner message="Carregando usuários..." />;
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Gestão de Usuários</h1>
-          <p className="text-zinc-500 dark:text-zinc-400">Controle de acesso e hierarquia da equipe.</p>
-        </div>
-        <Button onClick={openNewUserModal} className="flex items-center gap-2">
-          <UserPlus className="w-4 h-4" /> Adicionar Usuário
-        </Button>
-      </div>
+      <PageHeader
+        title="Gestão de Usuários"
+        subtitle="Controle de acesso e hierarquia da equipe."
+        actions={
+          <Button onClick={openNewUserModal}>
+            <UserPlus className="w-4 h-4" /> Adicionar Usuário
+          </Button>
+        }
+      />
 
-      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm overflow-hidden">
         <table className="w-full text-sm text-left">
-          <thead className="bg-zinc-50 dark:bg-zinc-950 text-zinc-500 dark:text-zinc-400 font-medium border-b border-zinc-200 dark:border-zinc-800">
+          <thead className="bg-zinc-100 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-400 font-medium border-b border-zinc-200 dark:border-zinc-700">
             <tr>
               <th className="px-6 py-4">Usuário</th>
               <th className="px-6 py-4">Email</th>
@@ -100,7 +95,7 @@ export const UserManagementPage: React.FC = () => {
               <th className="px-6 py-4 text-right">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {users.map(user => (
               <tr key={user.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50">
                 <td className="px-6 py-4">
@@ -143,66 +138,56 @@ export const UserManagementPage: React.FC = () => {
       </div>
 
       {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-md p-6 border border-zinc-200 dark:border-zinc-800">
-            <h2 className="text-xl font-bold mb-4 text-zinc-900 dark:text-white">{editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}</h2>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={editingUser.id ? 'Editar Usuário' : 'Novo Usuário'}
+        size="md"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave}>Salvar</Button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <Input
+            label="Nome Completo"
+            type="text"
+            value={editingUser.name || ''}
+            onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
+            placeholder="Digite o nome completo"
+          />
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nome Completo</label>
-                <input
-                  type="text"
-                  className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                  value={editingUser.name || ''}
-                  onChange={e => setEditingUser({ ...editingUser, name: e.target.value })}
-                />
-              </div>
+          <Input
+            label="Email"
+            type="email"
+            value={editingUser.email || ''}
+            onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
+            placeholder="email@empresa.com"
+          />
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Email</label>
-                <input
-                  type="email"
-                  className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                  value={editingUser.email || ''}
-                  onChange={e => setEditingUser({ ...editingUser, email: e.target.value })}
-                />
-              </div>
+          <Select
+            label="Função"
+            value={editingUser.role || 'leader'}
+            onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
+            options={[
+              { value: 'leader', label: 'Líder / Gestor' },
+              { value: 'admin', label: 'CEO / Admin' }
+            ]}
+          />
 
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Função</label>
-                <select
-                  className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                  value={editingUser.role}
-                  onChange={e => setEditingUser({ ...editingUser, role: e.target.value as any })}
-                >
-                  <option value="leader">Líder / Gestor</option>
-                  <option value="admin">CEO / Admin</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1">Setor Responsável (Opcional)</label>
-                <select
-                  className="w-full border border-zinc-300 dark:border-zinc-600 rounded-md p-2 bg-white dark:bg-black text-zinc-900 dark:text-white focus:ring-1 focus:ring-amber-500 focus:border-amber-500"
-                  value={editingUser.sectorId || ''}
-                  onChange={e => setEditingUser({ ...editingUser, sectorId: e.target.value })}
-                >
-                  <option value="">Sem restrição / Geral</option>
-                  {sectors.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSave}>Salvar</Button>
-            </div>
-          </div>
+          <Select
+            label="Setor Responsável (Opcional)"
+            value={editingUser.sectorId || ''}
+            onChange={e => setEditingUser({ ...editingUser, sectorId: e.target.value })}
+            options={[
+              { value: '', label: 'Sem restrição / Geral' },
+              ...sectors.map(s => ({ value: s.id, label: s.name }))
+            ]}
+          />
         </div>
-      )}
+      </Modal>
     </div>
   );
 };

@@ -24,14 +24,17 @@ export class KpiEntry {
     @Column({ type: "decimal", precision: 12, scale: 2 })
     target!: number;
 
-    @Column({ type: "decimal", precision: 12, scale: 2 })
-    realized!: number;
+    @Column({ type: "decimal", precision: 12, scale: 2, nullable: true, default: null })
+    realized!: number | null; // null = não preenchido, 0 = valor zero preenchido
 
     @Column({ type: "decimal", precision: 12, scale: 2, default: 0 })
     gap!: number;
 
     @Column({ type: "decimal", precision: 5, scale: 2, default: 0 })
     gapPercentage!: number;
+
+    @Column({ type: "boolean", default: false })
+    isCompleted!: boolean; // true quando o realizado foi preenchido e a meta da semana está "congelada"
 
     @ManyToOne(() => KPI, (kpi) => kpi.entries, { onDelete: "CASCADE" })
     @JoinColumn({ name: "kpiId" })

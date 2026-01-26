@@ -6,6 +6,10 @@ import { KPI } from "../entities/KPI";
 import { KpiEntry } from "../entities/KpiEntry";
 import { ActionPlan } from "../entities/ActionPlan";
 import { RootCause } from "../entities/RootCause";
+import { MonthlyTarget } from "../entities/MonthlyTarget";
+import { authDb } from "../auth/lucia";
+import bcryptjs from "bcryptjs";
+import { getWeeksForMonth, distributeMonthlyTarget, getNextMonths } from "../utils/weekCalculator";
 
 async function seed() {
     try {
@@ -15,9 +19,31 @@ async function seed() {
 
         console.log("🌱 Iniciando seed do banco de dados...");
 
-        // Clear existing data
         await AppDataSource.dropDatabase();
         await AppDataSource.synchronize();
+
+        // Recriar tabelas de autenticação
+        authDb.exec(`
+            CREATE TABLE IF NOT EXISTS user (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                name TEXT NOT NULL,
+                role TEXT DEFAULT 'leader',
+                avatar_url TEXT,
+                google_id TEXT UNIQUE,
+                password_hash TEXT,
+                email_verified INTEGER DEFAULT 0,
+                sector_id TEXT,
+                created_at INTEGER DEFAULT (unixepoch()),
+                updated_at INTEGER DEFAULT (unixepoch())
+            );
+            CREATE TABLE IF NOT EXISTS session (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+                expires_at INTEGER NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_session_user_id ON session(user_id);
+        `);
 
         const userRepository = AppDataSource.getRepository(User);
         const sectorRepository = AppDataSource.getRepository(Sector);
@@ -25,165 +51,273 @@ async function seed() {
         const entryRepository = AppDataSource.getRepository(KpiEntry);
         const actionPlanRepository = AppDataSource.getRepository(ActionPlan);
         const rootCauseRepository = AppDataSource.getRepository(RootCause);
+        const monthlyTargetRepository = AppDataSource.getRepository(MonthlyTarget);
 
-        // Create Users
-        const users = await userRepository.save([
-            {
-                name: "Roberto (CEO)",
-                email: "ceo@vorp.com",
-                role: "admin",
-                avatarInitials: "RO",
-            },
-            {
-                name: "Fernanda (CoS)",
-                email: "cos@vorp.com",
-                role: "admin",
-                avatarInitials: "FE",
-            },
-            {
-                name: "Allef (Líder)",
-                email: "allef@vorp.com",
-                role: "leader",
-                avatarInitials: "AL",
-            },
-            {
-                name: "Lais (Líder)",
-                email: "lais@vorp.com",
-                role: "leader",
-                avatarInitials: "LA",
-            },
-            {
-                name: "Sena (Vendas)",
-                email: "sena@vorp.com",
-                role: "leader",
-                avatarInitials: "SE",
-            },
+        // ==========================================
+        // 1. CRIAR USUÁRIOS (admins primeiro, sem setor)
+        // ==========================================
+        const admins = await userRepository.save([
+            { name: "Augusto Morais", email: "augusto@grupovorp.com", role: "admin", avatarInitials: "AM" },
+            { name: "Pedro Castro", email: "pedro.castro@grupovorp.com", role: "admin", avatarInitials: "PC" },
+            { name: "Ricássio Brandão", email: "ricassio.brandao@grupovorp.com", role: "admin", avatarInitials: "RB" },
+            { name: "Lucas Cardoso", email: "lucas.cardoso@grupovorp.com", role: "admin", avatarInitials: "LC" },
         ]);
 
-        console.log("✅ Usuários criados:", users.length);
+        console.log("✅ Admins criados:", admins.length);
 
-        // Create Sectors and KPIs
+        // ==========================================
+        // 2. CRIAR SETORES (oficiais)
+        // ==========================================
         const sectors = await sectorRepository.save([
-            {
-                name: "Comercial - Squad Allef",
-                kpis: [],
-            },
-            {
-                name: "Comercial - Squad Lais",
-                kpis: [],
-            },
-            {
-                name: "Marketing",
-                kpis: [],
-            },
-            {
-                name: "CS (Customer Success)",
-                kpis: [],
-            },
+            { name: "Comercial - Squad Allef", kpis: [] },
+            { name: "Comercial - Squad Lais", kpis: [] },
+            { name: "Marketing", kpis: [] },
+            { name: "CS", kpis: [] },
         ]);
 
         console.log("✅ Setores criados:", sectors.length);
 
-        // Create KPIs
-        const kpiData = [
-            {
-                sectorId: sectors[0].id,
-                kpis: [
-                    { name: "MRR Vendido", unit: "currency" as const, format: "R$ " },
-                    { name: "Valor de Vendas Recebido", unit: "currency" as const, format: "R$ " },
-                    { name: "Reuniões Agendadas", unit: "number" as const, format: "" },
-                    { name: "Reuniões Realizadas", unit: "number" as const, format: "" },
-                ],
-            },
-            {
-                sectorId: sectors[1].id,
-                kpis: [
-                    { name: "MRR Vendido", unit: "currency" as const, format: "R$ " },
-                    { name: "Reuniões Agendadas", unit: "number" as const, format: "" },
-                ],
-            },
-            {
-                sectorId: sectors[2].id,
-                kpis: [
-                    { name: "Número de Leads", unit: "number" as const, format: "" },
-                    { name: "Número de MQL", unit: "number" as const, format: "" },
-                    { name: "Valor Recebido (S. Selling)", unit: "currency" as const, format: "R$ " },
-                    { name: "Nº Reuniões Agendadas (S. Selling)", unit: "number" as const, format: "" },
-                    { name: "Nº Reuniões Realizadas (S. Selling)", unit: "number" as const, format: "" },
-                ],
-            },
-            {
-                sectorId: sectors[3].id,
-                kpis: [{ name: "% de Revenue Churn", unit: "percent" as const, format: "%" }],
-            },
+        // ==========================================
+        // 3. CRIAR LÍDERES (vinculados aos setores)
+        // ==========================================
+        const leaders = await userRepository.save([
+            { name: "Allef Medina", email: "allef@grupovorp.com", role: "leader", avatarInitials: "AM", sectorId: sectors[0].id },
+            { name: "Laís Santiago", email: "lais.ferreira@grupovorp.com", role: "leader", avatarInitials: "LS", sectorId: sectors[1].id },
+            { name: "Analu Teixeira", email: "analu@grupovorp.com", role: "leader", avatarInitials: "AT", sectorId: sectors[2].id },
+            { name: "Marcos Nunes", email: "marcos.nunes@grupovorp.com", role: "leader", avatarInitials: "MN", sectorId: sectors[3].id },
+        ]);
+
+        console.log("✅ Líderes criados:", leaders.length);
+
+        // Criar senhas para todos os usuários
+        const users = [...admins, ...leaders];
+        const defaultPassword = "Vorp@123";
+        const passwordHash = await bcryptjs.hash(defaultPassword, 10);
+
+        for (const user of users) {
+            authDb.prepare(`
+                INSERT OR REPLACE INTO user (id, email, name, role, avatar_url, password_hash, sector_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(user.id, user.email, user.name, user.role, null, passwordHash, user.sectorId || null, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000));
+        }
+
+        console.log("🔐 Senhas padrão criadas (Vorp@123)");
+
+        // ==========================================
+        // 4. CRIAR KPIs (oficiais)
+        // ==========================================
+        const kpiConfigs = [
+            // Comercial - Squad Allef
+            { sectorId: sectors[0].id, name: "MRR Vendido", unit: "currency" as const, format: "R$ ", isInverse: false },
+            { sectorId: sectors[0].id, name: "Valor de Vendas Recebido", unit: "currency" as const, format: "R$ ", isInverse: false },
+            { sectorId: sectors[0].id, name: "Reuniões Agendadas", unit: "number" as const, format: "", isInverse: false },
+            { sectorId: sectors[0].id, name: "Reuniões Realizadas", unit: "number" as const, format: "", isInverse: false },
+            
+            // Comercial - Squad Lais
+            { sectorId: sectors[1].id, name: "MRR Vendido", unit: "currency" as const, format: "R$ ", isInverse: false },
+            { sectorId: sectors[1].id, name: "Valor de Vendas Recebido", unit: "currency" as const, format: "R$ ", isInverse: false },
+            { sectorId: sectors[1].id, name: "Reuniões Agendadas", unit: "number" as const, format: "", isInverse: false },
+            { sectorId: sectors[1].id, name: "Reuniões Realizadas", unit: "number" as const, format: "", isInverse: false },
+            
+            // Marketing
+            { sectorId: sectors[2].id, name: "Número de Leads", unit: "number" as const, format: "", isInverse: false },
+            { sectorId: sectors[2].id, name: "Número de MQL", unit: "number" as const, format: "", isInverse: false },
+            { sectorId: sectors[2].id, name: "Valor Recebido (S. Selling)", unit: "currency" as const, format: "R$ ", isInverse: false },
+            { sectorId: sectors[2].id, name: "Reuniões Agendadas (S. Selling)", unit: "number" as const, format: "", isInverse: false },
+            { sectorId: sectors[2].id, name: "Reuniões Realizadas (S. Selling)", unit: "number" as const, format: "", isInverse: false },
+            
+            // CS
+            { sectorId: sectors[3].id, name: "Revenue Churn", unit: "currency" as const, format: "R$ ", isInverse: true },
         ];
 
-        for (const sectorKpis of kpiData) {
-            for (const kpiData of sectorKpis.kpis) {
-                await kpiRepository.save({
-                    ...kpiData,
-                    sectorId: sectorKpis.sectorId,
-                });
+        const kpis: KPI[] = [];
+        for (const kpiData of kpiConfigs) {
+            const kpi = await kpiRepository.save(kpiData);
+            kpis.push(kpi);
+        }
+
+        console.log("✅ KPIs criados:", kpis.length);
+
+        // ==========================================
+        // 5. METAS E ENTRIES PARA 6 MESES
+        // ==========================================
+        const nextMonths = getNextMonths(6);
+        console.log("📅 Meses a serem populados:", nextMonths.map(m => `${m.month}/${m.year}`).join(", "));
+
+        const monthlyTargetConfigs: Record<string, number> = {
+            // Comercial (ambos squads)
+            "MRR Vendido": 200000,
+            "Valor de Vendas Recebido": 180000,
+            "Reuniões Agendadas": 80,
+            "Reuniões Realizadas": 60,
+            
+            // Marketing
+            "Número de Leads": 500,
+            "Número de MQL": 200,
+            "Valor Recebido (S. Selling)": 50000,
+            "Reuniões Agendadas (S. Selling)": 40,
+            "Reuniões Realizadas (S. Selling)": 30,
+            
+            // CS
+            "Revenue Churn": 10000,
+        };
+
+        // Responsáveis por setor (usa os líderes criados)
+        const sectorLeaders: Record<string, string> = {};
+        for (const leader of leaders) {
+            if (leader.sectorId) {
+                sectorLeaders[leader.sectorId] = leader.name;
             }
         }
 
-        const allKpis = await kpiRepository.find();
-        console.log("✅ KPIs criados:", allKpis.length);
+        let entriesCreated = 0;
+        let monthlyTargetsCreated = 0;
+        let actionPlansCreated = 0;
 
-        // Create Sample KPI Entry with Action Plan
-        if (allKpis.length > 0) {
-            const firstKpi = allKpis.find((k) => k.name === "MRR Vendido");
-            if (firstKpi) {
-                const entry = await entryRepository.save({
-                    sectorId: sectors[0].id,
-                    kpiId: firstKpi.id,
-                    month: "Setembro",
-                    week: "Mês Geral",
-                    target: 171004.83,
-                    realized: 72708.66,
-                    gap: -98296.17,
-                    gapPercentage: 42.52,
+        const now = new Date();
+
+        for (const kpi of kpis) {
+            const baseTarget = monthlyTargetConfigs[kpi.name] || 100;
+
+            for (let monthIndex = 0; monthIndex < nextMonths.length; monthIndex++) {
+                const { month, year } = nextMonths[monthIndex];
+                const monthVariation = 1 + (Math.random() * 0.2 - 0.1);
+                const monthlyTarget = Math.round(baseTarget * monthVariation * 100) / 100;
+
+                await monthlyTargetRepository.save({
+                    sectorId: kpi.sectorId,
+                    kpiId: kpi.id,
+                    month,
+                    target: monthlyTarget,
                 });
+                monthlyTargetsCreated++;
 
-                // Create Root Causes
-                const causes = [
-                    "Falta de aderência ao processo de prospecção",
-                    "Existência de no-shows elevados",
-                    "Agendamentos para datas distantes",
-                    "Roteiro de qualificação pouco eficiente",
-                    "Inconsistência no follow anti-no-show",
-                ];
+                const weeks = getWeeksForMonth(month, year);
+                const weeklyTargets = distributeMonthlyTarget(monthlyTarget, month, year, kpi.unit);
 
-                for (let i = 0; i < causes.length; i++) {
-                    await rootCauseRepository.save({
-                        entryId: entry.id,
-                        cause: causes[i],
-                        order: i,
-                    });
+                // Determinar semanas já concluídas
+                let completedWeeks = 0;
+                if (monthIndex === 0) {
+                    // Mês atual: até a semana atual
+                    const currentDay = now.getDate();
+                    for (let i = 0; i < weeks.length; i++) {
+                        const match = weeks[i].match(/\((\d+)-(\d+)\)/);
+                        if (match) {
+                            const endDay = parseInt(match[2]);
+                            if (currentDay > endDay) completedWeeks++;
+                        }
+                    }
                 }
 
-                // Create Action Plan
-                await actionPlanRepository.save({
-                    entryId: entry.id,
-                    what: "Revisar roteiro e treinar equipe",
-                    why: "Aumentar taxa de comparecimento",
-                    where: "Time comercial",
-                    who: "Sena",
-                    when: "Imediato",
-                    how: "Role plays e simulações",
-                    howMuch: "R$ 0,00",
-                    status: "fazendo",
-                });
+                for (let weekIdx = 0; weekIdx < weeks.length; weekIdx++) {
+                    const week = weeks[weekIdx];
+                    const weekTarget = weeklyTargets[week] || monthlyTarget / weeks.length;
+                    
+                    let realized: number | null = null; // null = não preenchido
+                    let isCompleted = false;
 
-                console.log("✅ Entrada de KPI com plano de ação criada");
+                    if (weekIdx < completedWeeks) {
+                        isCompleted = true;
+                        const performanceVariation = 0.7 + Math.random() * 0.6;
+                        realized = Math.round(weekTarget * performanceVariation * 100) / 100;
+                        
+                        if (kpi.isInverse) {
+                            realized = Math.round(weekTarget * (0.5 + Math.random() * 0.7) * 100) / 100;
+                        }
+                    }
+
+                    // Para cálculo de GAP, usar 0 se realized for null
+                    const realizedForGap = realized ?? 0;
+                    let gap: number;
+                    let gapPercentage: number;
+
+                    if (kpi.isInverse) {
+                        gap = Math.round((weekTarget - realizedForGap) * 100) / 100;
+                        gapPercentage = weekTarget !== 0 ? Math.round(((weekTarget - realizedForGap) / weekTarget + 1) * 10000) / 100 : 0;
+                    } else {
+                        gap = Math.round((realizedForGap - weekTarget) * 100) / 100;
+                        gapPercentage = weekTarget !== 0 ? Math.round((realizedForGap / weekTarget) * 10000) / 100 : 0;
+                    }
+
+                    const entry = await entryRepository.save({
+                        sectorId: kpi.sectorId,
+                        kpiId: kpi.id,
+                        month,
+                        week,
+                        target: weekTarget,
+                        realized,
+                        gap,
+                        gapPercentage,
+                        isCompleted,
+                    });
+                    entriesCreated++;
+
+                    // Criar plano de ação para entries com GAP negativo
+                    const needsActionPlan = kpi.isInverse 
+                        ? gap < 0 && Math.abs(gap) > weekTarget * 0.1
+                        : gap < 0 && Math.abs(gap) > weekTarget * 0.15;
+
+                    if (isCompleted && needsActionPlan) {
+                        const rootCauses = [
+                            "Volume insuficiente de leads qualificados",
+                            "Taxa de conversão abaixo do esperado",
+                            "Processo de vendas não otimizado",
+                            "Capacitação da equipe insuficiente",
+                            "Ferramentas de trabalho inadequadas"
+                        ];
+                        
+                        for (let i = 0; i < rootCauses.length; i++) {
+                            await rootCauseRepository.save({
+                                entryId: entry.id,
+                                cause: rootCauses[i],
+                                order: i,
+                            });
+                        }
+
+                        const leader = sectorLeaders[kpi.sectorId] || "Gestor";
+                        await actionPlanRepository.save({
+                            entryId: entry.id,
+                            what: "Implementar melhorias no processo",
+                            why: "Atingir meta estabelecida",
+                            where: "Setor responsável",
+                            who: leader,
+                            when: "Próximas 2 semanas",
+                            how: "Análise de métricas e ajustes",
+                            howMuch: "R$ 2.000,00",
+                            status: ["a_fazer", "fazendo", "feito", "stand_by"][Math.floor(Math.random() * 4)] as any,
+                        });
+                        actionPlansCreated++;
+                    }
+                }
             }
         }
 
-        console.log("🎉 Seed concluído com sucesso!");
-        process.exit(0);
+        console.log("✅ Metas mensais criadas:", monthlyTargetsCreated);
+        console.log("✅ Entries semanais criadas:", entriesCreated);
+        console.log("✅ Planos de ação criados:", actionPlansCreated);
+
+        console.log("\n" + "=".repeat(50));
+        console.log("📊 RESUMO DO SEED");
+        console.log("=".repeat(50));
+        console.log(`👤 Usuários: ${users.length}`);
+        console.log(`🏢 Setores: ${sectors.length}`);
+        console.log(`📈 KPIs: ${kpis.length} (${kpis.filter(k => k.isInverse).length} de teto)`);
+        console.log(`🎯 Metas Mensais: ${monthlyTargetsCreated}`);
+        console.log(`📝 Entries Semanais: ${entriesCreated}`);
+        console.log(`📋 Planos de Ação: ${actionPlansCreated}`);
+        console.log("=".repeat(50));
+        console.log("\n🔐 Login: qualquer email @grupovorp.com");
+        console.log("🔐 Senha: Vorp@123");
+        console.log("\n✅ Seed concluído com sucesso!\n");
+
     } catch (error) {
-        console.error("❌ Erro ao executar seed:", error);
-        process.exit(1);
+        console.error("❌ Erro durante o seed:", error);
+        throw error;
+    } finally {
+        if (AppDataSource.isInitialized) {
+            await AppDataSource.destroy();
+        }
+        process.exit(0);
     }
 }
 

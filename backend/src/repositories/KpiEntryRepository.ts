@@ -77,6 +77,18 @@ export class KpiEntryRepository {
         return await this.repository.save(merged);
     }
 
+    /**
+     * Atualização direta de target, gap e gapPercentage.
+     * Usado pelo recálculo dinâmico para evitar conflitos com relações.
+     */
+    async updateTarget(id: string, target: number, gap: number, gapPercentage: number): Promise<void> {
+        await this.repository.update(id, {
+            target,
+            gap,
+            gapPercentage
+        });
+    }
+
     async delete(id: string): Promise<boolean> {
         const result = await this.repository.delete(id);
         return (result.affected ?? 0) > 0;

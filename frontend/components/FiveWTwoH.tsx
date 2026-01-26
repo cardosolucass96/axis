@@ -1,5 +1,6 @@
 import React from 'react';
 import { FiveWTwoH as FiveWTwoHType, User } from '../types';
+import { ds } from '../styles/design-tokens';
 
 interface FiveWTwoHProps {
   data?: FiveWTwoHType;
@@ -26,18 +27,18 @@ export const FiveWTwoHInput: React.FC<FiveWTwoHProps> = ({ data, onChange, avail
 
   return (
     <div className="space-y-4">
-      <h4 className="font-bold text-zinc-900 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-800 pb-2">Plano de Ação (5W2H)</h4>
+      <h4 className="font-bold text-zinc-800 dark:text-zinc-100 border-b border-zinc-200 dark:border-zinc-700 pb-2">Plano de Ação (5W2H)</h4>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {fields.map((field) => (
           <div key={field.key} className={`${field.fullWidth ? 'md:col-span-2' : ''}`}>
-            <label className="block text-xs font-bold text-zinc-800 dark:text-zinc-400 mb-1">{field.label}</label>
+            <label className={ds.input.label}>{field.label}</label>
             
             {field.type === 'select' ? (
               <select
                 value={values[field.key]}
                 onChange={(e) => onChange(field.key, e.target.value)}
-                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black text-zinc-900 dark:text-white shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm py-2 px-3 font-medium transition-colors"
+                className={ds.select.base}
               >
                 <option value="">Selecione um responsável...</option>
                 {availableUsers.map(u => (
@@ -50,7 +51,7 @@ export const FiveWTwoHInput: React.FC<FiveWTwoHProps> = ({ data, onChange, avail
                 value={values[field.key]}
                 onChange={(e) => onChange(field.key, e.target.value)}
                 placeholder={field.placeholder}
-                className="w-full rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-black text-zinc-900 dark:text-white shadow-sm focus:border-amber-500 focus:ring-1 focus:ring-amber-500 text-sm py-2 px-3 placeholder-zinc-400 dark:placeholder-zinc-600 font-medium transition-colors"
+                className={ds.input.base}
               />
             )}
           </div>

@@ -16,6 +16,9 @@ export class KPI {
     @Column({ type: "varchar", length: 50, default: "" })
     format!: string;
 
+    @Column({ type: "boolean", default: false })
+    isInverse!: boolean; // true = meta de teto (máximo), false = meta de piso (mínimo)
+
     @Column({ type: "uuid" })
     sectorId!: string;
 
