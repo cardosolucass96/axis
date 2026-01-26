@@ -4,6 +4,8 @@
   "main": "index.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
     "typeorm": "typeorm",
     "db:migrate": "typeorm migration:run -d src/data-source.ts",
     "db:migrate:create": "typeorm migration:create",

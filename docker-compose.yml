@@ -1,0 +1,97 @@
+version: "3.7"
+
+services:
+  axis-backend:
+    image: ghcr.io/lucas-cardoso/axis/axis-backend:latest
+    # Para build local, descomente:
+    # build:
+    #   context: ./backend
+    #   dockerfile: Dockerfile
+    networks:
+      - CardosoNet
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOST=0.0.0.0
+      - CORS_ORIGIN=https://axis.cardosolucas.com
+      - SESSION_SECRET=${SESSION_SECRET:-sua_chave_secreta_muito_segura_aqui_123}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=https://axis.cardosolucas.com/api/auth/google/callback
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      - LANG=pt_BR.UTF-8
+    volumes:
+      - axis-data:/app/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.axis-backend.rule=Host(`axis.cardosolucas.com`) && PathPrefix(`/api`)
+        - traefik.http.routers.axis-backend.entrypoints=websecure
+        - traefik.http.routers.axis-backend.priority=2
+        - traefik.http.routers.axis-backend.tls.certresolver=letsencryptresolver
+        - traefik.http.services.axis-backend.loadbalancer.passHostHeader=true
+        - traefik.http.services.axis-backend.loadbalancer.server.port=3000
+        # Middleware para remover /api do path
+        - traefik.http.middlewares.axis-strip-api.stripprefix.prefixes=/api
+        - traefik.http.routers.axis-backend.middlewares=axis-strip-api
+
+  axis-frontend:
+    image: ghcr.io/lucas-cardoso/axis/axis-frontend:latest
+    # Para build local, descomente:
+    # build:
+    #   context: ./frontend
+    #   dockerfile: Dockerfile
+    #   args:
+    #     - VITE_API_URL=https://axis.cardosolucas.com/api
+    #     - GEMINI_API_KEY=${GEMINI_API_KEY}
+    networks:
+      - CardosoNet
+    environment:
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=America/Sao_Paulo
+      - TZ=America/Sao_Paulo
+      - LANG=pt_BR.UTF-8
+    deploy:
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.axis-frontend.rule=Host(`axis.cardosolucas.com`)
+        - traefik.http.routers.axis-frontend.entrypoints=websecure
+        - traefik.http.routers.axis-frontend.priority=1
+        - traefik.http.routers.axis-frontend.tls.certresolver=letsencryptresolver
+        - traefik.http.services.axis-frontend.loadbalancer.passHostHeader=true
+        - traefik.http.services.axis-frontend.loadbalancer.server.port=80
+
+networks:
+  CardosoNet:
+    external: true
+
+volumes:
+  axis-data:
+    driver: local
