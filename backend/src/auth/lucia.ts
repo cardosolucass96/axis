@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 
 // Usa o mesmo banco de dados principal (axis.db)
 const dbPath = path.join(process.cwd(), "axis.db");
-export const authDb = new Database(dbPath);
+export const authDb: Database.Database = new Database(dbPath);
 
 // Cria tabelas se não existirem
 authDb.exec(`

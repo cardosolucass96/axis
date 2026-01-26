@@ -78,7 +78,7 @@ export async function authRoutes(app: FastifyInstance) {
                         google_id: null,
                         password_hash: null,
                         email_verified: 0,
-                        sector_id: existingUser.sector_id || null
+                        sector_id: existingUser.sectorId || null
                     };
                 } else {
                     return reply.status(404).send({ error: "Usuário de desenvolvimento não encontrado" });
@@ -518,6 +518,8 @@ export async function authRoutes(app: FastifyInstance) {
                             googleId: googleUser.sub,
                             role: existingUser.role
                         });
+                        // Busca password_hash da tabela de auth
+                        const authUser = getUserByEmail(existingUser.email);
                         user = {
                             id: existingUser.id,
                             email: existingUser.email,
@@ -525,9 +527,9 @@ export async function authRoutes(app: FastifyInstance) {
                             role: existingUser.role,
                             avatar_url: googleUser.picture || null,
                             google_id: googleUser.sub,
-                            password_hash: existingUser.password_hash || null,
+                            password_hash: authUser?.password_hash || null,
                             email_verified: 1,
-                            sector_id: existingUser.sector_id || null
+                            sector_id: existingUser.sectorId || null
                         };
                     } else {
                         // Cria novo usuário (login pela primeira vez)
