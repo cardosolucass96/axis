@@ -45,9 +45,6 @@ services:
         - traefik.http.routers.axis-backend.tls.certresolver=letsencryptresolver
         - traefik.http.services.axis-backend.loadbalancer.passHostHeader=true
         - traefik.http.services.axis-backend.loadbalancer.server.port=3000
-        # Middleware para remover /api do path
-        - traefik.http.middlewares.axis-strip-api.stripprefix.prefixes=/api
-        - traefik.http.routers.axis-backend.middlewares=axis-strip-api
 
   axis-frontend:
     image: ghcr.io/cardosolucass96/axis/axis-frontend:latest
