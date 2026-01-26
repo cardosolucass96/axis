@@ -75,11 +75,18 @@ export async function authRoutes(app: FastifyInstance) {
                         name: existingUser.name,
                         role: existingUser.role,
                         avatar_url: null,
-                        google_id: null
+                        google_id: null,
+                        password_hash: null,
+                        email_verified: 0,
+                        sector_id: existingUser.sector_id || null
                     };
                 } else {
                     return reply.status(404).send({ error: "Usuário de desenvolvimento não encontrado" });
                 }
+            }
+
+            if (!user) {
+                return reply.status(404).send({ error: "Usuário não encontrado" });
             }
 
             // Cria sessão
@@ -270,7 +277,7 @@ export async function authRoutes(app: FastifyInstance) {
                 
                 // Se existe mas não tem senha (ex: criado via Google ou seed), atualiza com senha
                 const passwordHash = await hashPassword(password);
-                const { updateUserPassword } = await import("../auth/lucia");
+                const { updateUserPassword } = await import("../auth/lucia.js");
                 updateUserPassword(existingUser.id, passwordHash);
                 
                 // Cria sessão
@@ -517,7 +524,10 @@ export async function authRoutes(app: FastifyInstance) {
                             name: existingUser.name,
                             role: existingUser.role,
                             avatar_url: googleUser.picture || null,
-                            google_id: googleUser.sub
+                            google_id: googleUser.sub,
+                            password_hash: existingUser.password_hash || null,
+                            email_verified: 1,
+                            sector_id: existingUser.sector_id || null
                         };
                     } else {
                         // Cria novo usuário (login pela primeira vez)
@@ -536,10 +546,17 @@ export async function authRoutes(app: FastifyInstance) {
                             name: googleUser.name,
                             role: "leader",
                             avatar_url: googleUser.picture || null,
-                            google_id: googleUser.sub
+                            google_id: googleUser.sub,
+                            password_hash: null,
+                            email_verified: 1,
+                            sector_id: null
                         };
                     }
                 }
+            }
+
+            if (!user) {
+                return reply.status(500).send({ error: "Erro ao criar usuário" });
             }
 
             // Cria sessão

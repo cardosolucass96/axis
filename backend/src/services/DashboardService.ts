@@ -140,7 +140,7 @@ export class DashboardService {
         }
 
         const totalTarget = financialEntries.reduce((acc, e) => acc + e.target, 0);
-        const totalRealized = financialEntries.reduce((acc, e) => acc + e.realized, 0);
+        const totalRealized = financialEntries.reduce((acc, e) => acc + (e.realized ?? 0), 0);
 
         // Agrupar gaps por setor
         const gapsBySector: Record<string, number> = {};
@@ -148,7 +148,7 @@ export class DashboardService {
             if (!gapsBySector[entry.sectorId]) {
                 gapsBySector[entry.sectorId] = 0;
             }
-            gapsBySector[entry.sectorId] += entry.realized - entry.target;
+            gapsBySector[entry.sectorId] += (entry.realized ?? 0) - entry.target;
         });
 
         const data: any[] = [];
