@@ -3,9 +3,22 @@ import { BetterSqlite3Adapter } from "@lucia-auth/adapter-sqlite";
 import Database from "better-sqlite3";
 import path from "path";
 import bcrypt from "bcryptjs";
+import fs from "fs";
 
 // Usa o mesmo banco de dados principal (axis.db)
-const dbPath = path.join(process.cwd(), "axis.db");
+// Em produção usa /app/data (volume montado), em dev usa raiz do projeto
+const dbPath = process.env.NODE_ENV === "production"
+    ? "/app/data/axis.db"
+    : path.join(process.cwd(), "axis.db");
+
+// Garante que o diretório existe em produção
+if (process.env.NODE_ENV === "production") {
+    const dataDir = path.dirname(dbPath);
+    if (!fs.existsSync(dataDir)) {
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+}
+
 export const authDb: Database.Database = new Database(dbPath);
 
 // Cria tabelas se não existirem
