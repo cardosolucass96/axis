@@ -26,6 +26,23 @@ const fastify = Fastify({
     logger: process.env.NODE_ENV === "development"
 });
 
+// Handler de erro global
+fastify.setErrorHandler((error, request, reply) => {
+    console.error("❌ Erro na rota:", {
+        method: request.method,
+        url: request.url,
+        statusCode: error.statusCode || 500,
+        message: error.message,
+        stack: error.stack
+    });
+
+    reply.status(error.statusCode || 500).send({
+        status: "error",
+        message: error.message || "Erro interno do servidor",
+        statusCode: error.statusCode || 500
+    });
+});
+
 // Register CORS plugin
 fastify.register(cors, {
     origin: CORS_ORIGIN,
@@ -82,3 +99,27 @@ const start = async () => {
 };
 
 start();
+
+// Captura erros não tratados
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('❌ Rejeição não tratada:', reason);
+    console.error('Promise:', promise);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('❌ Exceção não capturada:', error);
+    process.exit(1);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('📴 Encerrando servidor...');
+    await fastify.close();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('📴 Encerrando servidor...');
+    await fastify.close();
+    process.exit(0);
+});
