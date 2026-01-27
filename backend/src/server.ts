@@ -61,14 +61,18 @@ fastify.register(cookie, {
 
 // --- Rota de Health Check ---
 fastify.get("/health", async (request, reply) => {
+    console.log("🏥 Health check chamado");
+    
     // Verifica se a conexão com o banco está ativa
     if (!AppDataSource.isInitialized) {
+        console.log("❌ Health check: banco não inicializado");
         return reply.code(503).send({
             status: "error",
             message: "Serviço indisponível: Banco de dados desconectado"
         });
     }
 
+    console.log("✅ Health check: OK");
     // Retorna status OK e dados úteis de monitoramento
     return {
         status: "ok",
