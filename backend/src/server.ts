@@ -27,19 +27,22 @@ const fastify = Fastify({
 });
 
 // Handler de erro global
-fastify.setErrorHandler((error, request, reply) => {
+fastify.setErrorHandler((error: any, request, reply) => {
+    const statusCode = error?.statusCode || 500;
+    const message = error?.message || "Erro interno do servidor";
+    
     console.error("❌ Erro na rota:", {
         method: request.method,
         url: request.url,
-        statusCode: error.statusCode || 500,
-        message: error.message,
-        stack: error.stack
+        statusCode,
+        message,
+        stack: error?.stack
     });
 
-    reply.status(error.statusCode || 500).send({
+    reply.status(statusCode).send({
         status: "error",
-        message: error.message || "Erro interno do servidor",
-        statusCode: error.statusCode || 500
+        message,
+        statusCode
     });
 });
 
@@ -92,7 +95,8 @@ const start = async () => {
         await fastify.listen({ port: PORT, host: HOST });
         console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
         console.log(`📡 CORS habilitado para: ${CORS_ORIGIN.join(", ")}`);
-    } catch (err) {
+    } catch (err: any) {
+        console.error("❌ Erro ao iniciar servidor:", err?.message || err);
         fastify.log.error(err);
         process.exit(1);
     }
@@ -101,13 +105,12 @@ const start = async () => {
 start();
 
 // Captura erros não tratados
-process.on('unhandledRejection', (reason, promise) => {
+process.on('unhandledRejection', (reason: any) => {
     console.error('❌ Rejeição não tratada:', reason);
-    console.error('Promise:', promise);
 });
 
-process.on('uncaughtException', (error) => {
-    console.error('❌ Exceção não capturada:', error);
+process.on('uncaughtException', (error: any) => {
+    console.error('❌ Exceção não capturada:', error?.message || error);
     process.exit(1);
 });
 
