@@ -52,8 +52,9 @@ USER nodejs
 EXPOSE 3000
 
 # Health check - increased start-period to allow DB initialization
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+# Using 127.0.0.1 instead of localhost to avoid IPv6 resolution issues
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
 
 # Start application
 ENTRYPOINT ["dumb-init", "--"]
