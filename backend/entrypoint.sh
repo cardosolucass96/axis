@@ -2,7 +2,7 @@
 set -e
 
 echo "⏳ Executando migrações..."
-npm run migrate
+node dist/database/migrate.js
 
 echo "🚀 Iniciando servidor..."
-npm run start
+node dist/server.js

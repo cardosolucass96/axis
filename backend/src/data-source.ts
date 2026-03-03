@@ -20,6 +20,8 @@ export const AppDataSource = new DataSource({
     synchronize: process.env.NODE_ENV !== "production",
     logging: process.env.NODE_ENV === "development",
     entities: [User, Session, Sector, KPI, KpiEntry, ActionPlan, RootCause, MonthlyTarget],
-    migrations: ["src/database/migrations/*.ts"],
+    migrations: process.env.NODE_ENV === "production"
+        ? ["dist/database/migrations/*.js"]
+        : ["src/database/migrations/*.ts"],
     subscribers: [],
 });
