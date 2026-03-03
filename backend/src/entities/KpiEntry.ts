@@ -21,6 +21,9 @@ export class KpiEntry {
     @Column({ type: "varchar", length: 50 })
     week!: string; // e.g., "Semana 1"
 
+    @Column({ type: "integer", nullable: true, default: null })
+    day!: number | null; // null = entrada semanal, 1-31 = entrada diária
+
     @Column({ type: "decimal", precision: 12, scale: 2 })
     target!: number;
 

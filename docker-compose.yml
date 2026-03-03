@@ -14,6 +14,7 @@ services:
       - PORT=3000
       - HOST=0.0.0.0
       - CORS_ORIGIN=https://axis.cardosolucas.com
+      - FRONTEND_URL=https://axis.cardosolucas.com
       - SESSION_SECRET=${SESSION_SECRET:-sua_chave_secreta_muito_segura_aqui_123}
       - GOOGLE_REDIRECT_URI=https://axis.cardosolucas.com/api/auth/google/callback
       - GENERIC_TIMEZONE=America/Sao_Paulo

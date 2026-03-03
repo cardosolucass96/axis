@@ -121,13 +121,19 @@ export const dataService = {
   },
 
   // ===== ENTRIES =====
-  getEntries: async (sectorId?: string, month?: string): Promise<IKpiEntry[]> => {
+  getEntries: async (sectorId?: string, month?: string, day?: string, week?: string): Promise<IKpiEntry[]> => {
     try {
-      if (!sectorId && !month && cachedEntries && isCacheValid('entries')) {
+      if (!sectorId && !month && !day && !week && cachedEntries && isCacheValid('entries')) {
         return cachedEntries;
       }
 
-      const response = await api.entries.getAll({ sectorId, month });
+      const query: any = {};
+      if (sectorId) query.sectorId = sectorId;
+      if (month) query.month = month;
+      if (day !== undefined) query.day = day;
+      if (week) query.week = week;
+
+      const response = await api.entries.getAll(query);
 
       // Mapear dados do backend para o formato esperado pelo frontend
       const mappedEntries = response.map((entry: any) => {
@@ -237,8 +243,9 @@ export const dataService = {
     }
   },
 
-  createEntryId: (sectorId: string, kpiId: string, month: string, week: string) => {
-    return `${sectorId}-${kpiId}-${month}-${week}`.replace(/\s+/g, '').toLowerCase();
+  createEntryId: (sectorId: string, kpiId: string, month: string, week: string, day?: number) => {
+    const base = `${sectorId}-${kpiId}-${month}-${week}`.replace(/\s+/g, '').toLowerCase();
+    return day ? `${base}-day${day}` : base;
   },
 
   // ===== USERS =====

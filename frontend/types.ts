@@ -27,6 +27,7 @@ export interface KpiEntry {
   kpiId: string;
   month: string; // e.g., "Outubro 2023"
   week: string; // e.g., "Semana 1"
+  day?: number | null; // null/undefined = entrada semanal, 1-31 = entrada diária
   target: number | null;
   realized: number | null; // null = não preenchido, 0 = valor zero preenchido
   gap: number;

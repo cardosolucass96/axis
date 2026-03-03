@@ -3,7 +3,7 @@ import { KPIRepository } from "../repositories/KPIRepository";
 import { RootCauseRepository } from "../repositories/RootCauseRepository";
 import { MonthlyTargetRepository } from "../repositories/MonthlyTargetRepository";
 import { KpiEntry } from "../entities/KpiEntry";
-import { recalculateRemainingWeeklyTargets, WeeklyEntry, getWeeksForMonth } from "../utils/weekCalculator";
+import { recalculateRemainingWeeklyTargets, WeeklyEntry, getWeeksForMonth, getDaysInWeek, extractDayRange } from "../utils/weekCalculator";
 
 export class KpiEntryService {
     private entryRepository = new KpiEntryRepository();
@@ -26,9 +26,10 @@ export class KpiEntryService {
     async getEntriesByFilters(
         sectorId?: string,
         month?: string,
-        week?: string
+        week?: string,
+        day?: number | null
     ): Promise<KpiEntry[]> {
-        return await this.entryRepository.findByFilters(sectorId, month, week);
+        return await this.entryRepository.findByFilters(sectorId, month, week, day);
     }
 
     // Alias para compatibilidade com as rotas
@@ -37,11 +38,13 @@ export class KpiEntryService {
         month?: string;
         week?: string;
         kpiId?: string;
+        day?: number | null;
     }): Promise<KpiEntry[]> {
         return await this.entryRepository.findByFilters(
             filters.sectorId,
             filters.month,
-            filters.week
+            filters.week,
+            filters.day
         );
     }
 
@@ -70,20 +73,32 @@ export class KpiEntryService {
 
         const entryData: any = { ...data };
 
-        // Mapear 'causes' para 'rootCauses'
-        if (data.causes && Array.isArray(data.causes)) {
+        // Mapear 'causes' para 'rootCauses' (apenas para entries semanais)
+        if (data.causes && Array.isArray(data.causes) && !data.day) {
             entryData.rootCauses = data.causes.map((cause: string, index: number) => ({
                 cause,
                 order: index
             }));
             delete entryData.causes;
+        } else {
+            delete entryData.causes;
+        }
+
+        // Entries diárias não devem ter plano de ação
+        if (data.day) {
+            delete entryData.actionPlan;
+            delete entryData.actionPlanStatus;
+            delete entryData.rootCauses;
+            delete entryData.causes;
         }
 
         // Se houver actionPlanStatus, podemos inicializar o actionPlan com esse status
-        if (data.actionPlanStatus && !data.actionPlan) {
-            entryData.actionPlan = { status: data.actionPlanStatus };
-        } else if (data.actionPlanStatus && data.actionPlan) {
-            entryData.actionPlan = { ...data.actionPlan, status: data.actionPlanStatus };
+        if (!data.day) {
+            if (data.actionPlanStatus && !data.actionPlan) {
+                entryData.actionPlan = { status: data.actionPlanStatus };
+            } else if (data.actionPlanStatus && data.actionPlan) {
+                entryData.actionPlan = { ...data.actionPlan, status: data.actionPlanStatus };
+            }
         }
 
         // Calcular GAP (considerando se é KPI inverso/de teto)
@@ -94,20 +109,26 @@ export class KpiEntryService {
         const realizedForCalc = realized ?? 0;
         
         if (kpi.isInverse) {
-            // KPI inverso: meta é o teto (máximo permitido)
-            // GAP positivo = bom (abaixo do limite), GAP negativo = ruim (ultrapassou)
             entryData.gap = target - realizedForCalc;
-            // Atingimento: estar abaixo é bom, estar acima é ruim
             entryData.gapPercentage = target !== 0 ? ((target - realizedForCalc) / target + 1) * 100 : 0;
         } else {
-            // KPI normal: meta é o piso (mínimo a atingir)
             entryData.gap = realizedForCalc - target;
             entryData.gapPercentage = target !== 0 ? (realizedForCalc / target) * 100 : 0;
         }
         entryData.target = target;
-        entryData.realized = realized; // Manter null se não foi preenchido
+        entryData.realized = realized;
 
-        return await this.entryRepository.create(entryData);
+        // Preservar o campo day (null para semanal, número para diária)
+        entryData.day = data.day ?? null;
+
+        const createdEntry = await this.entryRepository.create(entryData);
+
+        // Se é uma entrada diária com realized preenchido, agregar para a semanal
+        if (data.day && hasRealized) {
+            await this.aggregateDailyToWeekly(data.sectorId, data.kpiId, data.month, data.week);
+        }
+
+        return createdEntry;
     }
 
     async updateEntry(
@@ -124,29 +145,38 @@ export class KpiEntryService {
 
         // Buscar KPI para verificar se é inverso
         const kpi = await this.kpiRepository.findById(entry.kpiId);
+        const isDailyEntry = entry.day !== null && entry.day !== undefined;
 
         const updateData: any = { ...data };
         // Evitar que o campo id no body conflite com o id do path
         delete updateData.id;
 
-        // Mapear 'causes' (frontend strings) para 'rootCauses' (backend entities)
-        if (data.causes && Array.isArray(data.causes)) {
-            updateData.rootCauses = data.causes.map((cause: string, index: number) => ({
-                cause,
-                order: index,
-                entryId: id
-            }));
+        // Entries diárias não devem ter plano de ação ou causas
+        if (isDailyEntry) {
+            delete updateData.actionPlan;
+            delete updateData.actionPlanStatus;
+            delete updateData.rootCauses;
             delete updateData.causes;
+        } else {
+            // Mapear 'causes' (frontend strings) para 'rootCauses' (backend entities)
+            if (data.causes && Array.isArray(data.causes)) {
+                updateData.rootCauses = data.causes.map((cause: string, index: number) => ({
+                    cause,
+                    order: index,
+                    entryId: id
+                }));
+                delete updateData.causes;
+            }
         }
 
         // Recalcular GAP se necessário (considerando se é KPI inverso/de teto)
         let shouldRecalculate = false;
+        let shouldAggregateDaily = false;
+
         if (data.realized !== undefined || data.target !== undefined) {
-            // Verificar se realized foi explicitamente definido (não undefined)
             const hasNewRealized = data.realized !== undefined;
             const newRealizedIsNull = data.realized === null;
             
-            // Se realized veio no request
             let realized: number | null;
             if (hasNewRealized) {
                 realized = newRealizedIsNull ? null : parseFloat(String(data.realized));
@@ -158,44 +188,52 @@ export class KpiEntryService {
             const realizedForCalc = realized ?? 0;
             
             if (kpi?.isInverse) {
-                // KPI inverso: meta é o teto (máximo permitido)
                 updateData.gap = target - realizedForCalc;
                 updateData.gapPercentage = target !== 0 ? ((target - realizedForCalc) / target + 1) * 100 : 0;
             } else {
-                // KPI normal: meta é o piso (mínimo a atingir)
                 updateData.gap = realizedForCalc - target;
                 updateData.gapPercentage = target !== 0 ? (realizedForCalc / target) * 100 : 0;
             }
             updateData.realized = realized;
             updateData.target = target;
             
-            // RECÁLCULO DINÂMICO: Sempre recalcular quando o realizado é atualizado (mesmo se já estava concluída)
-            if (hasNewRealized && !newRealizedIsNull) {
-                // Marcar como concluída se ainda não estava
-                if (!entry.isCompleted) {
+            if (isDailyEntry) {
+                // Entry diária: marcar como concluída se realized preenchido
+                if (hasNewRealized && !newRealizedIsNull) {
                     updateData.isCompleted = true;
-                    console.log(`[SERVICE] Semana ${entry.week} marcada como concluída.`);
+                    shouldAggregateDaily = true;
+                    console.log(`[SERVICE] Entry diária dia ${entry.day} atualizada, agregação será executada.`);
                 }
-                // Sempre recalcular as metas das semanas futuras quando o realizado muda
-                shouldRecalculate = true;
-                console.log(`[SERVICE] Recálculo será executado após save (realized atualizado para ${realized}).`);
+            } else {
+                // Entry semanal: lógica existente de recálculo
+                if (hasNewRealized && !newRealizedIsNull) {
+                    if (!entry.isCompleted) {
+                        updateData.isCompleted = true;
+                        console.log(`[SERVICE] Semana ${entry.week} marcada como concluída.`);
+                    }
+                    shouldRecalculate = true;
+                    console.log(`[SERVICE] Recálculo será executado após save (realized atualizado para ${realized}).`);
+                }
             }
         }
 
-        // Mapear status do plano de ação enviado de forma plana pelo frontend
-        if (data.actionPlanStatus) {
+        // Mapear status do plano de ação (apenas para entries semanais)
+        if (!isDailyEntry && data.actionPlanStatus) {
             if (updateData.actionPlan) {
                 updateData.actionPlan.status = data.actionPlanStatus;
             } else if (entry.actionPlan) {
-                // Se o actionPlan já existe no banco mas não veio no updateData
                 updateData.actionPlan = { ...entry.actionPlan, status: data.actionPlanStatus };
             } else {
-                // Se não existe, cria um objeto básico para o cascade save
                 updateData.actionPlan = { status: data.actionPlanStatus };
             }
         }
 
         const result = await this.entryRepository.update(id, updateData);
+
+        // Se é entry diária, agregar para a semanal
+        if (shouldAggregateDaily) {
+            await this.aggregateDailyToWeekly(entry.sectorId, entry.kpiId, entry.month, entry.week);
+        }
 
         // RECÁLCULO DINÂMICO: Executar APÓS o save para garantir que a entry está atualizada
         if (shouldRecalculate) {
@@ -236,8 +274,8 @@ export class KpiEntryService {
             return { updated: 0, newTargets: {} };
         }
         
-        // Buscar todas as entries do mês para este KPI
-        const entries = await this.entryRepository.findByFilters(sectorId, month);
+        // Buscar apenas entries semanais (day IS NULL) do mês para este KPI
+        const entries = await this.entryRepository.findByFilters(sectorId, month, undefined, null);
         const kpiEntries = entries.filter(e => e.kpiId === kpiId);
         
         // Mapear entries para o formato esperado pelo recálculo
@@ -302,6 +340,111 @@ export class KpiEntryService {
         
         console.log(`[SERVICE] Recálculo concluído: ${updated} entradas atualizadas.`);
         return { updated, newTargets };
+    }
+
+    /**
+     * Agrega os valores realizados das entries diárias para a entry semanal.
+     * - Soma todos os realized diários → atualiza o realized semanal
+     * - Recalcula GAP e % na entry semanal
+     * - Marca semanal como isCompleted quando TODOS os dias têm realized preenchido
+     * - Dispara recálculo de semanas futuras se semanal ficou completed
+     */
+    async aggregateDailyToWeekly(
+        sectorId: string,
+        kpiId: string,
+        month: string,
+        week: string
+    ): Promise<void> {
+        console.log(`[SERVICE] Agregando entries diárias para semanal: ${week}`);
+
+        // Buscar todas as entries diárias da semana
+        const dailyEntries = await this.entryRepository.findDailyEntriesForWeek(sectorId, kpiId, month, week);
+        
+        // Buscar a entry semanal (ou criar uma se não existir)
+        let weeklyEntry = await this.entryRepository.findWeeklyEntry(sectorId, kpiId, month, week);
+        if (!weeklyEntry) {
+            console.log('[SERVICE] Entry semanal não encontrada, criando uma automaticamente...');
+            weeklyEntry = await this.entryRepository.create({
+                sectorId,
+                kpiId,
+                month,
+                week,
+                day: null,
+                target: 0,
+                realized: null,
+                gap: 0,
+                gapPercentage: 0,
+                isCompleted: false
+            } as any);
+            console.log(`[SERVICE] Entry semanal criada: ${weeklyEntry.id}`);
+        }
+
+        // Buscar KPI para saber se é inverso
+        const kpi = await this.kpiRepository.findById(kpiId);
+
+        // Calcular soma dos realizados diários (ignorar entries sem realized)
+        const filledDailyEntries = dailyEntries.filter(e => e.realized !== null && e.realized !== undefined);
+        const totalRealized = filledDailyEntries.reduce((sum, e) => sum + parseFloat(String(e.realized)), 0);
+        
+        // Calcular quantos dias a semana tem
+        const daysInWeek = getDaysInWeek(week);
+        
+        // Verificar se TODOS os dias foram preenchidos
+        const allDaysFilled = filledDailyEntries.length >= daysInWeek;
+        
+        // Se nenhum dia foi preenchido, manter null no semanal
+        const weeklyRealized = filledDailyEntries.length > 0 ? totalRealized : null;
+        
+        // Calcular GAP/% da entry semanal
+        const weeklyTarget = parseFloat(String(weeklyEntry.target));
+        const realizedForCalc = weeklyRealized ?? 0;
+        let gap: number;
+        let gapPercentage: number;
+        
+        if (kpi?.isInverse) {
+            gap = weeklyTarget - realizedForCalc;
+            gapPercentage = weeklyTarget !== 0 ? ((weeklyTarget - realizedForCalc) / weeklyTarget + 1) * 100 : 0;
+        } else {
+            gap = realizedForCalc - weeklyTarget;
+            gapPercentage = weeklyTarget !== 0 ? (realizedForCalc / weeklyTarget) * 100 : 0;
+        }
+
+        // Determinar isCompleted: todos os dias preenchidos
+        const wasCompleted = weeklyEntry.isCompleted;
+        const isNowCompleted = allDaysFilled;
+
+        // Atualizar entry semanal
+        await this.entryRepository.updateWeeklyRealized(
+            weeklyEntry.id,
+            weeklyRealized,
+            gap,
+            gapPercentage,
+            isNowCompleted
+        );
+
+        console.log(`[SERVICE] Semanal atualizada: realized=${weeklyRealized}, gap=${gap.toFixed(2)}, completed=${isNowCompleted} (${filledDailyEntries.length}/${daysInWeek} dias)`);
+
+        // Se a semana acabou de ser completada, executar recálculo de semanas futuras
+        if (isNowCompleted && !wasCompleted) {
+            try {
+                console.log(`[SERVICE] Semana ${week} completada! Iniciando recálculo de semanas futuras...`);
+                const recalcResult = await this.recalculateRemainingTargets(sectorId, kpiId, month);
+                console.log(`[SERVICE] Recálculo concluído: ${recalcResult.updated} entradas atualizadas.`);
+            } catch (err) {
+                console.error('[SERVICE] Erro no recálculo dinâmico:', err);
+            }
+        }
+    }
+
+    /**
+     * Busca entries diárias de uma semana para um setor
+     */
+    async getDailyEntriesForWeek(
+        sectorId: string,
+        month: string,
+        week: string
+    ): Promise<KpiEntry[]> {
+        return await this.entryRepository.findByFilters(sectorId, month, week);
     }
 
     async deleteEntry(id: string): Promise<boolean> {

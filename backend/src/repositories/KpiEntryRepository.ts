@@ -34,7 +34,8 @@ export class KpiEntryRepository {
     async findByFilters(
         sectorId?: string,
         month?: string,
-        week?: string
+        week?: string,
+        day?: number | null
     ): Promise<KpiEntry[]> {
         const query = this.repository.createQueryBuilder("entry");
 
@@ -50,12 +51,65 @@ export class KpiEntryRepository {
             query.andWhere("entry.week = :week", { week });
         }
 
+        // day === undefined → não filtra (retorna tudo)
+        // day === null → apenas entries semanais (day IS NULL)
+        // day === número → apenas entries daquele dia
+        if (day !== undefined) {
+            if (day === null) {
+                query.andWhere("entry.day IS NULL");
+            } else {
+                query.andWhere("entry.day = :day", { day });
+            }
+        }
+
         return await query
             .leftJoinAndSelect("entry.kpi", "kpi")
             .leftJoinAndSelect("entry.sector", "sector")
             .leftJoinAndSelect("entry.actionPlan", "actionPlan")
             .leftJoinAndSelect("entry.rootCauses", "rootCauses")
             .getMany();
+    }
+
+    /**
+     * Busca todas as entries diárias de uma semana específica para um KPI
+     */
+    async findDailyEntriesForWeek(
+        sectorId: string,
+        kpiId: string,
+        month: string,
+        week: string
+    ): Promise<KpiEntry[]> {
+        return await this.repository.createQueryBuilder("entry")
+            .where("entry.sectorId = :sectorId", { sectorId })
+            .andWhere("entry.kpiId = :kpiId", { kpiId })
+            .andWhere("entry.month = :month", { month })
+            .andWhere("entry.week = :week", { week })
+            .andWhere("entry.day IS NOT NULL")
+            .leftJoinAndSelect("entry.kpi", "kpi")
+            .leftJoinAndSelect("entry.sector", "sector")
+            .getMany();
+    }
+
+    /**
+     * Busca a entry semanal (day IS NULL) de um KPI específico
+     */
+    async findWeeklyEntry(
+        sectorId: string,
+        kpiId: string,
+        month: string,
+        week: string
+    ): Promise<KpiEntry | null> {
+        return await this.repository.createQueryBuilder("entry")
+            .where("entry.sectorId = :sectorId", { sectorId })
+            .andWhere("entry.kpiId = :kpiId", { kpiId })
+            .andWhere("entry.month = :month", { month })
+            .andWhere("entry.week = :week", { week })
+            .andWhere("entry.day IS NULL")
+            .leftJoinAndSelect("entry.kpi", "kpi")
+            .leftJoinAndSelect("entry.sector", "sector")
+            .leftJoinAndSelect("entry.actionPlan", "actionPlan")
+            .leftJoinAndSelect("entry.rootCauses", "rootCauses")
+            .getOne();
     }
 
     async create(entry: Partial<KpiEntry>): Promise<KpiEntry> {
@@ -86,6 +140,25 @@ export class KpiEntryRepository {
             target,
             gap,
             gapPercentage
+        });
+    }
+
+    /**
+     * Atualização direta do realized, gap, gapPercentage e isCompleted.
+     * Usado pela agregação de entries diárias para a semanal.
+     */
+    async updateWeeklyRealized(
+        id: string, 
+        realized: number | null, 
+        gap: number, 
+        gapPercentage: number, 
+        isCompleted: boolean
+    ): Promise<void> {
+        await this.repository.update(id, {
+            realized,
+            gap,
+            gapPercentage,
+            isCompleted
         });
     }
 

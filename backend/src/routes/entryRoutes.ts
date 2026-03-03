@@ -4,14 +4,15 @@ import { KpiEntryService } from "../services/KpiEntryService.js";
 const kpiEntryService = new KpiEntryService();
 
 export async function entryRoutes(fastify: FastifyInstance) {
-  // GET /entries - Listar todas as entradas (com filtros: sectorId, month, week)
+  // GET /entries - Listar todas as entradas (com filtros: sectorId, month, week, day)
   fastify.get("/entries", async (request, reply) => {
     try {
-      const { sectorId, month, week, kpiId } = request.query as {
+      const { sectorId, month, week, kpiId, day } = request.query as {
         sectorId?: string;
         month?: string;
         week?: string;
         kpiId?: string;
+        day?: string;
       };
 
       const filters: any = {};
@@ -19,6 +20,10 @@ export async function entryRoutes(fastify: FastifyInstance) {
       if (month) filters.month = month;
       if (week) filters.week = week;
       if (kpiId) filters.kpiId = kpiId;
+      // day=null → filtrar apenas entries semanais; day=N → filtrar dia N
+      if (day !== undefined) {
+        filters.day = day === 'null' ? null : parseInt(day);
+      }
 
       const entries = await kpiEntryService.findByFilters(filters);
       return reply.send({ status: "success", data: entries });
@@ -121,14 +126,18 @@ export async function entryRoutes(fastify: FastifyInstance) {
   fastify.get("/sectors/:sectorId/entries", async (request, reply) => {
     try {
       const { sectorId } = request.params as { sectorId: string };
-      const { month, week } = request.query as {
+      const { month, week, day } = request.query as {
         month?: string;
         week?: string;
+        day?: string;
       };
 
       const filters: any = { sectorId };
       if (month) filters.month = month;
       if (week) filters.week = week;
+      if (day !== undefined) {
+        filters.day = day === 'null' ? null : parseInt(day);
+      }
 
       const entries = await kpiEntryService.findByFilters(filters);
       return reply.send({ status: "success", data: entries });

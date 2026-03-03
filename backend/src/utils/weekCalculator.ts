@@ -178,6 +178,20 @@ export function isSameWeek(week1: string, week2: string): boolean {
   return false;
 }
 
+/**
+ * Retorna um array com todos os números de dias de uma semana
+ * Ex: "OUT Sem1 (1-4)" -> [1, 2, 3, 4]
+ */
+export function getDaysArrayForWeek(weekLabel: string): number[] {
+  const range = extractDayRange(weekLabel);
+  if (!range) return [];
+  const days: number[] = [];
+  for (let d = range.start; d <= range.end; d++) {
+    days.push(d);
+  }
+  return days;
+}
+
 // ============================================
 // INTERFACE E FUNÇÕES DE RECÁLCULO DINÂMICO
 // ============================================

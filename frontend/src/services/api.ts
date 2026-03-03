@@ -70,6 +70,7 @@ async function request<T>(
     const requestInit: RequestInit = {
         method,
         headers: {} as Record<string, string>,
+        cache: 'no-store' as RequestCache,
     };
 
     // Apenas adicionar Content-Type se houver body
@@ -162,7 +163,7 @@ export const api = {
 
     // ===== KPI ENTRIES =====
     entries: {
-        getAll: (query?: { sectorId?: string; month?: string; week?: string }) =>
+        getAll: (query?: { sectorId?: string; month?: string; week?: string; day?: string }) =>
             request<any[]>("GET", "/entries", { query }),
         getById: (id: string) => request<any>("GET", `/entries/${id}`),
         getBySector: (sectorId: string) =>
