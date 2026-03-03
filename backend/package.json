@@ -6,6 +6,8 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "migrate": "tsx src/database/migrate.ts",
+    "start:migrate": "npm run migrate && npm run start",
     "typeorm": "typeorm",
     "db:migrate": "typeorm migration:run -d src/data-source.ts",
     "db:migrate:create": "typeorm migration:create",

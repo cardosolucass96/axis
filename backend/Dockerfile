@@ -36,6 +36,10 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built files from builder
 COPY --from=builder /app/dist ./dist
 
+# Copy entrypoint script
+COPY entrypoint.sh ./
+RUN chmod +x ./entrypoint.sh
+
 # Create data directory for SQLite
 RUN mkdir -p /app/data && chown -R nodejs:nodejs /app/data
 
@@ -56,6 +60,6 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
     CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/health || exit 1
 
-# Start application
+# Start application with migrations
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "dist/server.js"]
+CMD ["sh", "entrypoint.sh"]
