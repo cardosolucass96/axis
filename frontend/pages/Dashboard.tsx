@@ -14,7 +14,7 @@ import { WeekRangePicker } from '../components/WeekRangePicker';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { MONTHS } from '../types';
 import type { KpiEntry, Sector, KPI } from '../types';
-import { getNextMonths, getWeeksForMonth, extractDayRange, getMonthAbbrev } from '../utils/weekCalculator';
+import { getNextMonths, getWeeksForMonth, extractDayRange, getMonthAbbrev, getDaysArrayForWeek } from '../utils/weekCalculator';
 import { useAuth } from '../contexts/AuthContext';
 
 // Mapa de meses abreviados para índice
@@ -46,12 +46,15 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   
   // State for Filters - usando semanas
+  const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
   const [startWeek, setStartWeek] = useState<string | null>(null);
   const [endWeek, setEndWeek] = useState<string | null>(null);
   const [filterSector, setFilterSector] = useState<string>('Todos');
   const [entries, setEntries] = useState<KpiEntry[]>([]);
+  const [allWeekEntries, setAllWeekEntries] = useState<KpiEntry[]>([]); // entradas da semana selecionada (modo dia)
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDayLoading, setIsDayLoading] = useState(false);
   const [initialFiltersSet, setInitialFiltersSet] = useState(false);
 
   // Meses disponíveis (6 meses)
@@ -84,7 +87,7 @@ export const Dashboard: React.FC = () => {
       try {
         setIsLoading(true);
         const [entriesData, sectorsData] = await Promise.all([
-          dataService.getEntries(),
+          dataService.getEntries(undefined, undefined, 'null'), // só entradas semanais (day=null)
           dataService.getSectors()
         ]);
         
@@ -105,6 +108,31 @@ export const Dashboard: React.FC = () => {
     loadData();
   }, [user]);
 
+  // Carregar entradas diárias quando modo dia está ativo
+  useEffect(() => {
+    if (viewMode !== 'day' || !startWeek) {
+      setAllWeekEntries([]);
+      return;
+    }
+
+    const loadDayData = async () => {
+      try {
+        setIsDayLoading(true);
+        const data = await dataService.getEntries(undefined, undefined, undefined, startWeek);
+        const filteredByRole = user?.role === 'leader' && user?.sectorId
+          ? data.filter((e: KpiEntry) => e.sectorId === user.sectorId)
+          : data;
+        setAllWeekEntries(filteredByRole);
+      } catch (err) {
+        console.error('Erro ao carregar dados diários:', err);
+      } finally {
+        setIsDayLoading(false);
+      }
+    };
+
+    loadDayData();
+  }, [viewMode, startWeek, user]);
+
   // Setores disponíveis para filtro
   const availableSectors = useMemo(() => {
     if (user?.role === 'leader' && user?.sectorId) {
@@ -115,8 +143,22 @@ export const Dashboard: React.FC = () => {
 
   // Handler para mudança de semanas
   const handleWeekRangeChange = (start: string | null, end: string | null) => {
-    setStartWeek(start);
-    setEndWeek(end);
+    if (viewMode === 'day') {
+      // modo dia: sempre semana única (usa start como âncora)
+      setStartWeek(start);
+      setEndWeek(start);
+    } else {
+      setStartWeek(start);
+      setEndWeek(end);
+    }
+  };
+
+  // Handler para troca de modo de visualização
+  const handleViewModeChange = (mode: 'week' | 'day') => {
+    setViewMode(mode);
+    if (mode === 'day' && startWeek) {
+      setEndWeek(startWeek); // colapsa range para 1 semana
+    }
   };
 
   // --- Filter Logic ---
@@ -130,14 +172,15 @@ export const Dashboard: React.FC = () => {
     });
   }, [entries, startWeek, endWeek, filterSector]);
 
-  // Label do período selecionado (número de semanas)
+  // Label do período selecionado
   const periodLabel = useMemo(() => {
     if (!startWeek || !endWeek) return '';
+    if (viewMode === 'day') return startWeek;
     const startIdx = getWeekGlobalIndex(startWeek);
     const endIdx = getWeekGlobalIndex(endWeek);
     const count = Math.abs(endIdx - startIdx) + 1;
     return `${count} semana${count > 1 ? 's' : ''}`;
-  }, [startWeek, endWeek]);
+  }, [startWeek, endWeek, viewMode]);
 
   const clearFilters = () => {
     if (availableMonths.length > 0) {
@@ -240,6 +283,49 @@ export const Dashboard: React.FC = () => {
         performance: Math.round(monthsMap[month].totalGapPct / monthsMap[month].count)
       }));
   }, [entries]);
+
+  // Dados diários para o gráfico de tendência no modo dia
+  const dayTrendData = useMemo(() => {
+    if (viewMode !== 'day' || !startWeek) return [];
+    const days = getDaysArrayForWeek(startWeek);
+
+    const weeklyEntries = allWeekEntries.filter(e =>
+      (e.day === null || e.day === undefined) &&
+      e.realized !== null &&
+      (filterSector === 'Todos' || e.sectorId === filterSector)
+    );
+
+    return days.map(day => {
+      const dayEntries = allWeekEntries.filter(e =>
+        e.day === day &&
+        e.realized !== null &&
+        (filterSector === 'Todos' || e.sectorId === filterSector)
+      );
+
+      if (dayEntries.length > 0) {
+        const totalGapPct = dayEntries.reduce((sum, e) => sum + Math.min(e.gapPercentage, 150), 0);
+        return {
+          label: String(day),
+          performance: Math.round(totalGapPct / dayEntries.length),
+          isEstimated: false
+        };
+      }
+
+      // Fallback: gapPercentage da entrada semanal é invariante à divisão linear
+      if (weeklyEntries.length > 0) {
+        const totalGapPct = weeklyEntries.reduce((sum, e) => sum + Math.min(e.gapPercentage, 150), 0);
+        return {
+          label: `${day}*`,
+          performance: Math.round(totalGapPct / weeklyEntries.length),
+          isEstimated: true
+        };
+      }
+
+      return { label: String(day), performance: 0, isEstimated: true };
+    });
+  }, [viewMode, startWeek, allWeekEntries, filterSector]);
+
+  const hasEstimatedDayData = dayTrendData.some(d => d.isEstimated);
 
   // Dados para gráfico de saúde
   const healthChartData = [
@@ -406,6 +492,30 @@ export const Dashboard: React.FC = () => {
             </div>
           )}
           
+          {/* Toggle modo semana / dia */}
+          <div className="flex items-center rounded-lg border border-zinc-300 dark:border-zinc-700 overflow-hidden text-sm font-medium">
+            <button
+              onClick={() => handleViewModeChange('week')}
+              className={`px-3 py-2 transition-colors ${
+                viewMode === 'week'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+            >
+              Semana
+            </button>
+            <button
+              onClick={() => handleViewModeChange('day')}
+              className={`px-3 py-2 transition-colors ${
+                viewMode === 'day'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+            >
+              Dia
+            </button>
+          </div>
+
           {/* Seletor de Semanas */}
           <WeekRangePicker
             startWeek={startWeek}
@@ -554,21 +664,27 @@ export const Dashboard: React.FC = () => {
 
           {/* GRÁFICOS PRINCIPAIS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Gráfico de Tendência */}
+            {/* Gráfico de Tendência / Performance Diária */}
             <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-700 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">Tendência de Performance</h3>
-                  <p className="text-sm text-zinc-500">Evolução do atingimento de metas ao longo do tempo</p>
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                    {viewMode === 'day' ? 'Performance Diária' : 'Tendência de Performance'}
+                  </h3>
+                  <p className="text-sm text-zinc-500">
+                    {viewMode === 'day'
+                      ? `Atingimento dia a dia — ${startWeek}`
+                      : 'Evolução do atingimento de metas ao longo do tempo'}
+                  </p>
                 </div>
-                {trendData.length > 1 && (
+                {viewMode === 'week' && trendData.length > 1 && (
                   <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold ${
                     trendData[trendData.length - 1]?.performance >= (trendData[trendData.length - 2]?.performance || 0)
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
                       : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
                   }`}>
-                    {trendData[trendData.length - 1]?.performance >= (trendData[trendData.length - 2]?.performance || 0) 
-                      ? <TrendingUp className="w-4 h-4" /> 
+                    {trendData[trendData.length - 1]?.performance >= (trendData[trendData.length - 2]?.performance || 0)
+                      ? <TrendingUp className="w-4 h-4" />
                       : <TrendingDown className="w-4 h-4" />
                     }
                     <span>
@@ -579,33 +695,76 @@ export const Dashboard: React.FC = () => {
               </div>
 
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
-                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} unit="%" domain={[0, 150]} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
-                      itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
-                      formatter={(value: number) => [`${value}%`, 'Atingimento']}
-                    />
-                    <ReferenceLine y={100} stroke="#52525b" strokeDasharray="3 3" />
-                    <Area 
-                      type="monotone" 
-                      dataKey="performance" 
-                      stroke="#f59e0b" 
-                      strokeWidth={3}
-                      fillOpacity={1} 
-                      fill="url(#colorPerformance)" 
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
+                {viewMode === 'week' ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="colorPerformance" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                      <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} unit="%" domain={[0, 150]} />
+                      <Tooltip
+                        contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                        itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
+                        formatter={(value: number) => [`${value}%`, 'Atingimento']}
+                      />
+                      <ReferenceLine y={100} stroke="#52525b" strokeDasharray="3 3" />
+                      <Area
+                        type="monotone"
+                        dataKey="performance"
+                        stroke="#f59e0b"
+                        strokeWidth={3}
+                        fillOpacity={1}
+                        fill="url(#colorPerformance)"
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : isDayLoading ? (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                    Carregando dados diários...
+                  </div>
+                ) : dayTrendData.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                    Sem dados para esta semana
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={dayTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} unit="%" domain={[0, 150]} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                          itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
+                          formatter={(value: number, _name: string, props: any) => [
+                            `${value}%${props.payload?.isEstimated ? ' (média estimada)' : ''}`,
+                            'Atingimento'
+                          ]}
+                        />
+                        <ReferenceLine y={100} stroke="#52525b" strokeDasharray="3 3" />
+                        <Bar dataKey="performance" radius={[4, 4, 0, 0]} barSize={32}>
+                          {dayTrendData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.isEstimated ? '#a16207' : entry.performance >= 100 ? '#10b981' : entry.performance >= 90 ? '#f59e0b' : '#ef4444'}
+                              opacity={entry.isEstimated ? 0.6 : 1}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                    {hasEstimatedDayData && (
+                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-2">
+                        * Dias sem entrada diária cadastrada — valor estimado pela média semanal
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
 

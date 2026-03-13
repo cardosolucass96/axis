@@ -9,7 +9,7 @@ import { RootCause } from "../entities/RootCause";
 import { MonthlyTarget } from "../entities/MonthlyTarget";
 import { authDb } from "../auth/lucia";
 import bcryptjs from "bcryptjs";
-import { getWeeksForMonth, distributeMonthlyTarget, getNextMonths } from "../utils/weekCalculator";
+import { getWeeksForMonth, distributeMonthlyTarget, getNextMonths, getDaysArrayForWeek } from "../utils/weekCalculator";
 
 async function seed() {
     try {
@@ -139,10 +139,29 @@ async function seed() {
         console.log("✅ KPIs criados:", kpis.length);
 
         // ==========================================
-        // 5. METAS E ENTRIES PARA 6 MESES
+        // 5. METAS E ENTRIES PARA 6 MESES (3 passados + atual + 2 futuros)
         // ==========================================
-        const nextMonths = getNextMonths(6);
-        console.log("📅 Meses a serem populados:", nextMonths.map(m => `${m.month}/${m.year}`).join(", "));
+
+        // Gera meses: 3 anteriores ao atual + 3 a partir do atual (inclui o atual)
+        function getMonthsWindow(pastCount: number, futureCount: number): { month: string; year: number; isPast: boolean; isCurrent: boolean }[] {
+            const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            const today = new Date();
+            const result = [];
+            for (let i = -pastCount; i <= futureCount; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                result.push({
+                    month: monthNames[d.getMonth()],
+                    year: d.getFullYear(),
+                    isPast: i < 0,
+                    isCurrent: i === 0,
+                });
+            }
+            return result;
+        }
+
+        const allMonths = getMonthsWindow(3, 2); // 3 passados + atual + 2 futuros = 6 total
+        console.log("📅 Meses a serem populados:", allMonths.map(m => `${m.month}/${m.year}${m.isPast ? ' (passado)' : m.isCurrent ? ' (atual)' : ' (futuro)'}`).join(", "));
 
         const monthlyTargetConfigs: Record<string, number> = {
             // Comercial (ambos squads)
@@ -171,6 +190,7 @@ async function seed() {
         }
 
         let entriesCreated = 0;
+        let dailyEntriesCreated = 0;
         let monthlyTargetsCreated = 0;
         let actionPlansCreated = 0;
 
@@ -179,8 +199,8 @@ async function seed() {
         for (const kpi of kpis) {
             const baseTarget = monthlyTargetConfigs[kpi.name] || 100;
 
-            for (let monthIndex = 0; monthIndex < nextMonths.length; monthIndex++) {
-                const { month, year } = nextMonths[monthIndex];
+            for (const monthMeta of allMonths) {
+                const { month, year, isPast, isCurrent } = monthMeta;
                 const monthVariation = 1 + (Math.random() * 0.2 - 0.1);
                 const monthlyTarget = Math.round(baseTarget * monthVariation * 100) / 100;
 
@@ -197,8 +217,11 @@ async function seed() {
 
                 // Determinar semanas já concluídas
                 let completedWeeks = 0;
-                if (monthIndex === 0) {
-                    // Mês atual: até a semana atual
+                if (isPast) {
+                    // Mês passado: todas as semanas concluídas
+                    completedWeeks = weeks.length;
+                } else if (isCurrent) {
+                    // Mês atual: semanas cujo último dia já passou
                     const currentDay = now.getDate();
                     for (let i = 0; i < weeks.length; i++) {
                         const match = weeks[i].match(/\((\d+)-(\d+)\)/);
@@ -208,6 +231,7 @@ async function seed() {
                         }
                     }
                 }
+                // mês futuro: completedWeeks = 0 (nada preenchido)
 
                 for (let weekIdx = 0; weekIdx < weeks.length; weekIdx++) {
                     const week = weeks[weekIdx];
@@ -252,6 +276,55 @@ async function seed() {
                     });
                     entriesCreated++;
 
+                    // Criar entradas diárias para semanas concluídas
+                    if (isCompleted && realized !== null) {
+                        const days = getDaysArrayForWeek(week);
+                        const daysCount = days.length;
+                        let remainingRealized = realized;
+
+                        for (let di = 0; di < days.length; di++) {
+                            const day = days[di];
+                            const isLastDay = di === days.length - 1;
+
+                            let dayRealized: number;
+                            if (isLastDay) {
+                                // último dia absorve o restante (garante soma correta)
+                                dayRealized = Math.max(0, Math.round(remainingRealized * 100) / 100);
+                            } else {
+                                // variação por dia: 40% a 160% da cota diária igual
+                                const variation = 0.4 + Math.random() * 1.2;
+                                dayRealized = Math.round((realized / daysCount) * variation * 100) / 100;
+                                remainingRealized -= dayRealized;
+                            }
+
+                            const dayTarget = Math.round((weekTarget / daysCount) * 100) / 100;
+
+                            let dayGap: number;
+                            let dayGapPercentage: number;
+                            if (kpi.isInverse) {
+                                dayGap = Math.round((dayTarget - dayRealized) * 100) / 100;
+                                dayGapPercentage = dayTarget !== 0 ? Math.round(((dayTarget - dayRealized) / dayTarget + 1) * 10000) / 100 : 0;
+                            } else {
+                                dayGap = Math.round((dayRealized - dayTarget) * 100) / 100;
+                                dayGapPercentage = dayTarget !== 0 ? Math.round((dayRealized / dayTarget) * 10000) / 100 : 0;
+                            }
+
+                            await entryRepository.save({
+                                sectorId: kpi.sectorId,
+                                kpiId: kpi.id,
+                                month,
+                                week,
+                                day,
+                                target: dayTarget,
+                                realized: dayRealized,
+                                gap: dayGap,
+                                gapPercentage: dayGapPercentage,
+                                isCompleted: true,
+                            });
+                            dailyEntriesCreated++;
+                        }
+                    }
+
                     // Criar plano de ação para entries com GAP negativo
                     const needsActionPlan = kpi.isInverse 
                         ? gap < 0 && Math.abs(gap) > weekTarget * 0.1
@@ -294,6 +367,7 @@ async function seed() {
 
         console.log("✅ Metas mensais criadas:", monthlyTargetsCreated);
         console.log("✅ Entries semanais criadas:", entriesCreated);
+        console.log("✅ Entries diárias criadas:", dailyEntriesCreated);
         console.log("✅ Planos de ação criados:", actionPlansCreated);
 
         console.log("\n" + "=".repeat(50));
@@ -304,6 +378,7 @@ async function seed() {
         console.log(`📈 KPIs: ${kpis.length} (${kpis.filter(k => k.isInverse).length} de teto)`);
         console.log(`🎯 Metas Mensais: ${monthlyTargetsCreated}`);
         console.log(`📝 Entries Semanais: ${entriesCreated}`);
+        console.log(`📅 Entries Diárias: ${dailyEntriesCreated}`);
         console.log(`📋 Planos de Ação: ${actionPlansCreated}`);
         console.log("=".repeat(50));
         console.log("\n🔐 Login: qualquer email @grupovorp.com");
