@@ -46,9 +46,10 @@ export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   
   // State for Filters - usando semanas
-  const [viewMode, setViewMode] = useState<'week' | 'day'>('week');
+  const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('week');
   const [startWeek, setStartWeek] = useState<string | null>(null);
   const [endWeek, setEndWeek] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>(''); // e.g. "Março 2026"
   const [filterSector, setFilterSector] = useState<string>('Todos');
   const [entries, setEntries] = useState<KpiEntry[]>([]);
   const [allWeekEntries, setAllWeekEntries] = useState<KpiEntry[]>([]); // entradas da semana selecionada (modo dia)
@@ -57,8 +58,26 @@ export const Dashboard: React.FC = () => {
   const [isDayLoading, setIsDayLoading] = useState(false);
   const [initialFiltersSet, setInitialFiltersSet] = useState(false);
 
-  // Meses disponíveis (6 meses)
+  // Meses disponíveis para WeekRangePicker (6 meses a partir de agora)
   const availableMonths = useMemo(() => getNextMonths(6), []);
+
+  // Meses disponíveis extraídos dos dados reais (para modo mês)
+  const entryMonths = useMemo(() => {
+    const monthSet = new Set<string>();
+    entries.forEach(e => { if (e.month) monthSet.add(e.month); });
+    // Ordenar cronologicamente usando o índice em MONTHS
+    return Array.from(monthSet).sort((a, b) => MONTHS.indexOf(a) - MONTHS.indexOf(b));
+  }, [entries]);
+
+  // Sincronizar selectedMonth quando entryMonths muda ou modo mês é ativado
+  useEffect(() => {
+    if (viewMode !== 'month') return;
+    if (entryMonths.length === 0) return;
+    // Se o mês selecionado atual não existe nos dados reais, usar o último mês disponível
+    if (!entryMonths.includes(selectedMonth)) {
+      setSelectedMonth(entryMonths[entryMonths.length - 1]);
+    }
+  }, [viewMode, entryMonths, selectedMonth]);
 
   // Definir filtros iniciais
   useEffect(() => {
@@ -66,17 +85,20 @@ export const Dashboard: React.FC = () => {
       // Período padrão: mês atual (todas as semanas)
       const currentMonth = availableMonths[0];
       const weeks = getWeeksForMonth(currentMonth.month, currentMonth.year);
-      
+
       if (weeks.length > 0) {
         setStartWeek(weeks[0]);
         setEndWeek(weeks[weeks.length - 1]);
       }
-      
+
+      // Mês padrão para modo mês (mesmo formato do banco: apenas nome)
+      setSelectedMonth(currentMonth.month);
+
       // Se for líder, filtrar pelo seu setor
       if (user?.role === 'leader' && user?.sectorId) {
         setFilterSector(user.sectorId);
       }
-      
+
       setInitialFiltersSet(true);
     }
   }, [initialFiltersSet, user, availableMonths]);
@@ -154,33 +176,50 @@ export const Dashboard: React.FC = () => {
   };
 
   // Handler para troca de modo de visualização
-  const handleViewModeChange = (mode: 'week' | 'day') => {
+  const handleViewModeChange = (mode: 'month' | 'week' | 'day') => {
     setViewMode(mode);
     if (mode === 'day' && startWeek) {
       setEndWeek(startWeek); // colapsa range para 1 semana
+    }
+    // Ao entrar no modo mês, garantir que selectedMonth seja um mês com dados reais
+    if (mode === 'month' && entryMonths.length > 0 && !entryMonths.includes(selectedMonth)) {
+      setSelectedMonth(entryMonths[entryMonths.length - 1]);
     }
   };
 
   // --- Filter Logic ---
   const filteredEntries = useMemo(() => {
+    if (viewMode === 'month') {
+      // Se não há meses disponíveis nos dados, mostrar tudo filtrado apenas por setor
+      if (!selectedMonth || entryMonths.length === 0) {
+        return entries.filter(e => filterSector === 'Todos' || e.sectorId === filterSector);
+      }
+      return entries.filter(e => {
+        const matchMonth = e.month === selectedMonth;
+        const matchSector = filterSector === 'Todos' || e.sectorId === filterSector;
+        return matchMonth && matchSector;
+      });
+    }
+
     if (!startWeek || !endWeek) return entries;
-    
+
     return entries.filter(e => {
       const inRange = isWeekInRange(e.week, startWeek, endWeek);
       const matchSector = filterSector === 'Todos' || e.sectorId === filterSector;
       return inRange && matchSector;
     });
-  }, [entries, startWeek, endWeek, filterSector]);
+  }, [entries, viewMode, selectedMonth, startWeek, endWeek, filterSector]);
 
   // Label do período selecionado
   const periodLabel = useMemo(() => {
+    if (viewMode === 'month') return selectedMonth || '';
     if (!startWeek || !endWeek) return '';
     if (viewMode === 'day') return startWeek;
     const startIdx = getWeekGlobalIndex(startWeek);
     const endIdx = getWeekGlobalIndex(endWeek);
     const count = Math.abs(endIdx - startIdx) + 1;
     return `${count} semana${count > 1 ? 's' : ''}`;
-  }, [startWeek, endWeek, viewMode]);
+  }, [startWeek, endWeek, viewMode, selectedMonth]);
 
   const clearFilters = () => {
     if (availableMonths.length > 0) {
@@ -189,6 +228,12 @@ export const Dashboard: React.FC = () => {
       if (weeks.length > 0) {
         setStartWeek(weeks[0]);
         setEndWeek(weeks[weeks.length - 1]);
+      }
+      // Para modo mês: preferir o último mês com dados reais
+      if (viewMode === 'month' && entryMonths.length > 0) {
+        setSelectedMonth(entryMonths[entryMonths.length - 1]);
+      } else {
+        setSelectedMonth(currentMonth.month);
       }
     }
     setFilterSector('Todos');
@@ -253,8 +298,8 @@ export const Dashboard: React.FC = () => {
       if (!sectorData[e.sectorId]) {
         sectorData[e.sectorId] = { target: 0, realized: 0, name: sector.name };
       }
-      sectorData[e.sectorId].target += e.target || 0;
-      sectorData[e.sectorId].realized += e.realized || 0;
+      sectorData[e.sectorId].target += Number(e.target) || 0;
+      sectorData[e.sectorId].realized += Number(e.realized) || 0;
     });
 
     return Object.values(sectorData).map(s => ({
@@ -327,6 +372,39 @@ export const Dashboard: React.FC = () => {
 
   const hasEstimatedDayData = dayTrendData.some(d => d.isEstimated);
 
+  // Dados de tendência por semana dentro do mês selecionado (modo mês)
+  // Agrupa pelos valores reais de week nas entries ao invés de calcular semanas teóricas
+  // (evita mismatch de day-ranges entre anos diferentes)
+  const monthTrendData = useMemo(() => {
+    if (viewMode !== 'month') return [];
+
+    // Coletar semanas únicas das entries filtradas, ordenadas pelo número da semana
+    const weekMap = new Map<string, { totalGapPct: number; count: number }>();
+
+    filteredEntries.forEach(e => {
+      if (e.realized === null) return;
+      if (!weekMap.has(e.week)) weekMap.set(e.week, { totalGapPct: 0, count: 0 });
+      const entry = weekMap.get(e.week)!;
+      entry.totalGapPct += Math.min(e.gapPercentage, 150);
+      entry.count += 1;
+    });
+
+    // Ordenar semanas pelo índice global (mês + número da semana)
+    const sortedWeeks = Array.from(weekMap.keys()).sort((a, b) => {
+      return getWeekGlobalIndex(a) - getWeekGlobalIndex(b);
+    });
+
+    return sortedWeeks.map(weekLabel => {
+      const data = weekMap.get(weekLabel)!;
+      return {
+        label: weekLabel.replace(/^[A-Z]{3}\s+/, ''), // "Sem1 (1-6)"
+        fullLabel: weekLabel,
+        performance: Math.round(data.totalGapPct / data.count),
+        count: data.count
+      };
+    });
+  }, [viewMode, filteredEntries]);
+
   // Dados para gráfico de saúde
   const healthChartData = [
     { name: 'Batidos', value: healthMetrics.onTrack, color: '#10b981' },
@@ -372,8 +450,8 @@ export const Dashboard: React.FC = () => {
           sectorName: sector.name 
         };
       }
-      grouped[sectorKey][kpiKey].realized += e.realized || 0;
-      grouped[sectorKey][kpiKey].target += e.target || 0;
+      grouped[sectorKey][kpiKey].realized += Number(e.realized) || 0;
+      grouped[sectorKey][kpiKey].target += Number(e.target) || 0;
     });
 
     // Coletar todos os KPIs disponíveis de todos os setores
@@ -491,9 +569,19 @@ export const Dashboard: React.FC = () => {
               </select>
             </div>
           )}
-          
-          {/* Toggle modo semana / dia */}
+
+          {/* Toggle modo mês / semana / dia */}
           <div className="flex items-center rounded-lg border border-zinc-300 dark:border-zinc-700 overflow-hidden text-sm font-medium">
+            <button
+              onClick={() => handleViewModeChange('month')}
+              className={`px-3 py-2 transition-colors ${
+                viewMode === 'month'
+                  ? 'bg-amber-500 text-white'
+                  : 'bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+            >
+              Mês
+            </button>
             <button
               onClick={() => handleViewModeChange('week')}
               className={`px-3 py-2 transition-colors ${
@@ -516,13 +604,31 @@ export const Dashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Seletor de Semanas */}
-          <WeekRangePicker
-            startWeek={startWeek}
-            endWeek={endWeek}
-            onChange={handleWeekRangeChange}
-            months={availableMonths}
-          />
+          {/* Seletor de Mês (modo mês) ou Semanas (modo semana/dia) */}
+          {viewMode === 'month' ? (
+            entryMonths.length > 0 ? (
+            <select
+              value={entryMonths.includes(selectedMonth) ? selectedMonth : entryMonths[entryMonths.length - 1]}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 pr-8 text-sm font-medium text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer"
+            >
+              {entryMonths.map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+            ) : (
+            <span className="text-sm text-zinc-400 dark:text-zinc-500 px-3 py-2 border border-zinc-300 dark:border-zinc-700 rounded-lg">
+              Todos os dados
+            </span>
+            )
+          ) : (
+            <WeekRangePicker
+              startWeek={startWeek}
+              endWeek={endWeek}
+              onChange={handleWeekRangeChange}
+              months={availableMonths}
+            />
+          )}
 
           <Button variant="ghost" onClick={clearFilters} className="text-xs">
             Resetar
@@ -664,15 +770,17 @@ export const Dashboard: React.FC = () => {
 
           {/* GRÁFICOS PRINCIPAIS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* Gráfico de Tendência / Performance Diária */}
+            {/* Gráfico de Tendência / Performance Diária / Performance Mensal */}
             <div className="lg:col-span-2 bg-white dark:bg-zinc-900 rounded-xl p-6 border border-zinc-200 dark:border-zinc-700 shadow-sm">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
-                    {viewMode === 'day' ? 'Performance Diária' : 'Tendência de Performance'}
+                    {viewMode === 'month' ? 'Performance Semanal do Mês' : viewMode === 'day' ? 'Performance Diária' : 'Tendência de Performance'}
                   </h3>
                   <p className="text-sm text-zinc-500">
-                    {viewMode === 'day'
+                    {viewMode === 'month'
+                      ? `Atingimento por semana — ${selectedMonth}`
+                      : viewMode === 'day'
                       ? `Atingimento dia a dia — ${startWeek}`
                       : 'Evolução do atingimento de metas ao longo do tempo'}
                   </p>
@@ -695,7 +803,38 @@ export const Dashboard: React.FC = () => {
               </div>
 
               <div className="h-64">
-                {viewMode === 'week' ? (
+                {viewMode === 'month' ? (
+                  monthTrendData.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-sm text-zinc-400">
+                      Sem dados para este mês
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={monthTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                        <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 11 }} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} unit="%" domain={[0, 150]} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                          itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
+                          formatter={(value: number, _name: string, props: any) => [
+                            `${value}% (${props.payload?.count || 0} KPIs)`,
+                            'Atingimento'
+                          ]}
+                        />
+                        <ReferenceLine y={100} stroke="#52525b" strokeDasharray="3 3" />
+                        <Bar dataKey="performance" radius={[4, 4, 0, 0]} barSize={40}>
+                          {monthTrendData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={entry.performance >= 100 ? '#10b981' : entry.performance >= 90 ? '#f59e0b' : entry.performance > 0 ? '#ef4444' : '#3f3f46'}
+                            />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )
+                ) : viewMode === 'week' ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={trendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                       <defs>

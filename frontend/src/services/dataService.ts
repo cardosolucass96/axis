@@ -141,10 +141,20 @@ export const dataService = {
         const sId = typeof entry.sectorId === 'object' ? entry.sectorId?.id : entry.sectorId;
         const kId = typeof entry.kpiId === 'object' ? entry.kpiId?.id : entry.kpiId;
 
+        // SQLite + TypeORM retorna colunas decimal como strings — forçar conversão numérica
+        const toNum = (v: any): number => (v === null || v === undefined ? 0 : parseFloat(v) || 0);
+        const toNumOrNull = (v: any): number | null =>
+          v === null || v === undefined ? null : (isNaN(parseFloat(v)) ? null : parseFloat(v));
+
         return {
           ...entry,
           sectorId: sId || entry.sector?.id,
           kpiId: kId || entry.kpi?.id,
+          // Campos numéricos garantidos como number (não string)
+          target: toNumOrNull(entry.target) ?? 0,
+          realized: entry.realized === null || entry.realized === undefined ? null : parseFloat(entry.realized),
+          gap: toNum(entry.gap),
+          gapPercentage: toNum(entry.gapPercentage),
           // Converte objetos RootCause para array de strings
           causes: entry.rootCauses ? entry.rootCauses.map((rc: any) => rc.cause) : (entry.causes || []),
           // Garante que campos de ActionPlan existam para exibição
