@@ -7,14 +7,14 @@ import {
 import { 
   AlertCircle, CheckCircle2, Clock, PauseCircle, TrendingUp, TrendingDown, 
   Target, ArrowUpRight, ArrowDownRight, BarChart3, Activity,
-  Building2, Zap, Hash, Percent, DollarSign
+  Building2, Zap, Hash, Percent, DollarSign, ChevronDown, ChevronRight, Layers
 } from 'lucide-react';
 import { Button } from '../components/Button';
 import { WeekRangePicker } from '../components/WeekRangePicker';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import { MONTHS } from '../types';
 import type { KpiEntry, Sector, KPI } from '../types';
-import { getNextMonths, getWeeksForMonth, extractDayRange, getMonthAbbrev, getDaysArrayForWeek } from '../utils/weekCalculator';
+import { getNextMonths, getWeeksForMonth, extractDayRange, getMonthAbbrev, getDaysArrayForWeek, getDaysInWeek, getTotalDaysInMonth } from '../utils/weekCalculator';
 import { useAuth } from '../contexts/AuthContext';
 
 // Mapa de meses abreviados para índice
@@ -42,6 +42,15 @@ const isWeekInRange = (weekLabel: string, startWeek: string, endWeek: string): b
   return currentIdx >= minIdx && currentIdx <= maxIdx;
 };
 
+// Tipo para metas mensais
+interface MonthlyTargetData {
+  id: string;
+  sectorId: string;
+  kpiId: string;
+  month: string;
+  target: number;
+}
+
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   
@@ -54,6 +63,7 @@ export const Dashboard: React.FC = () => {
   const [entries, setEntries] = useState<KpiEntry[]>([]);
   const [allWeekEntries, setAllWeekEntries] = useState<KpiEntry[]>([]); // entradas da semana selecionada (modo dia)
   const [sectors, setSectors] = useState<Sector[]>([]);
+  const [monthlyTargets, setMonthlyTargets] = useState<MonthlyTargetData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDayLoading, setIsDayLoading] = useState(false);
   const [initialFiltersSet, setInitialFiltersSet] = useState(false);
@@ -108,9 +118,10 @@ export const Dashboard: React.FC = () => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [entriesData, sectorsData] = await Promise.all([
+        const [entriesData, sectorsData, mtData] = await Promise.all([
           dataService.getEntries(undefined, undefined, 'null'), // só entradas semanais (day=null)
-          dataService.getSectors()
+          dataService.getSectors(),
+          dataService.getMonthlyTargets()
         ]);
         
         // Se for líder, filtrar entries pelo seu setor
@@ -120,6 +131,7 @@ export const Dashboard: React.FC = () => {
         
         setEntries(filteredByRole);
         setSectors(sectorsData);
+        setMonthlyTargets(mtData || []);
       } catch (error) {
         console.error('Erro ao carregar dados do dashboard:', error);
       } finally {
@@ -210,6 +222,90 @@ export const Dashboard: React.FC = () => {
     });
   }, [entries, viewMode, selectedMonth, startWeek, endWeek, filterSector]);
 
+  // ==========================================
+  // MAPA DE METAS MENSAIS & CÁLCULO PROPORCIONAL
+  // ==========================================
+  const monthlyTargetMap = useMemo(() => {
+    // Chave: "sectorId|kpiId|month" → target mensal
+    const map: Record<string, number> = {};
+    monthlyTargets.forEach(mt => {
+      map[`${mt.sectorId}|${mt.kpiId}|${mt.month}`] = Number(mt.target);
+    });
+    return map;
+  }, [monthlyTargets]);
+
+  // Pré-calcular dias do período selecionado por mês (independente de entries)
+  const selectedPeriodDaysByMonth = useMemo(() => {
+    const daysByMonth = new Map<string, number>();
+
+    if (viewMode === 'month') {
+      // Mês inteiro: todos os dias
+      if (selectedMonth) {
+        daysByMonth.set(selectedMonth, getTotalDaysInMonth(selectedMonth));
+      }
+      return daysByMonth;
+    }
+
+    // Semana/Dia: percorrer todas as semanas disponíveis nos meses e filtrar pelo range
+    if (!startWeek || !endWeek) return daysByMonth;
+
+    availableMonths.forEach(({ month, year }) => {
+      const weeks = getWeeksForMonth(month, year);
+      weeks.forEach(week => {
+        if (isWeekInRange(week, startWeek!, endWeek!)) {
+          const days = getDaysInWeek(week);
+          daysByMonth.set(month, (daysByMonth.get(month) || 0) + days);
+        }
+      });
+    });
+
+    // Também checar meses dos dados reais (caso não estejam em availableMonths)
+    entryMonths.forEach(month => {
+      if (!daysByMonth.has(month)) {
+        const weeks = getWeeksForMonth(month);
+        weeks.forEach(week => {
+          if (isWeekInRange(week, startWeek!, endWeek!)) {
+            const days = getDaysInWeek(week);
+            daysByMonth.set(month, (daysByMonth.get(month) || 0) + days);
+          }
+        });
+      }
+    });
+
+    return daysByMonth;
+  }, [viewMode, selectedMonth, startWeek, endWeek, availableMonths, entryMonths]);
+
+  /**
+   * Obtém a meta proporcional para um KPI no período selecionado.
+   * - Mês: meta mensal completa
+   * - Semana/Dia: metaMensal / diasNoMês × diasSelecionados
+   * - Percentuais: meta fixa (não divide por dias)
+   */
+  const getProportionalTarget = (sectorId: string, kpiId: string, unit: string): number => {
+    let totalTarget = 0;
+
+    selectedPeriodDaysByMonth.forEach((selectedDays, month) => {
+      const mtKey = `${sectorId}|${kpiId}|${month}`;
+      const monthTarget = monthlyTargetMap[mtKey];
+      if (monthTarget === undefined || monthTarget === 0) return;
+
+      if (unit === 'percent') {
+        // Percentuais: meta fixa, não soma
+        totalTarget = monthTarget;
+        return;
+      }
+
+      if (viewMode === 'month') {
+        totalTarget += monthTarget;
+      } else {
+        const totalDaysInMonth = getTotalDaysInMonth(month);
+        totalTarget += (monthTarget / totalDaysInMonth) * selectedDays;
+      }
+    });
+
+    return totalTarget;
+  };
+
   // Label do período selecionado
   const periodLabel = useMemo(() => {
     if (viewMode === 'month') return selectedMonth || '';
@@ -285,29 +381,60 @@ export const Dashboard: React.FC = () => {
     return { completed, inProgress, toDo, standBy, total, completionRate };
   }, [filteredEntries]);
 
-  // Performance por setor
+  // Performance por setor (com metas proporcionais)
   const sectorPerformance = useMemo(() => {
-    const sectorData: Record<string, { target: number; realized: number; name: string }> = {};
+    // Agrupar entries por setor e KPI para calcular meta proporcional
+    const sectorKpiEntries: Record<string, Record<string, { entries: KpiEntry[]; kpi: KPI | undefined; realized: number }>> = {};
 
     filteredEntries.forEach(e => {
       if (e.realized === null) return;
-      
       const sector = sectors.find(s => s.id === e.sectorId);
       if (!sector) return;
+      const kpi = sector.kpis.find(k => k.id === e.kpiId);
 
-      if (!sectorData[e.sectorId]) {
-        sectorData[e.sectorId] = { target: 0, realized: 0, name: sector.name };
+      if (!sectorKpiEntries[e.sectorId]) sectorKpiEntries[e.sectorId] = {};
+      if (!sectorKpiEntries[e.sectorId][e.kpiId]) {
+        sectorKpiEntries[e.sectorId][e.kpiId] = { entries: [], kpi, realized: 0 };
       }
-      sectorData[e.sectorId].target += Number(e.target) || 0;
-      sectorData[e.sectorId].realized += Number(e.realized) || 0;
+      sectorKpiEntries[e.sectorId][e.kpiId].entries.push(e);
+      sectorKpiEntries[e.sectorId][e.kpiId].realized += Number(e.realized) || 0;
     });
 
-    return Object.values(sectorData).map(s => ({
-      name: s.name,
-      atingimento: s.target > 0 ? Math.round((s.realized / s.target) * 100) : 0,
-      meta: 100
-    })).sort((a, b) => b.atingimento - a.atingimento);
-  }, [filteredEntries, sectors]);
+    const result: { name: string; atingimento: number; meta: number }[] = [];
+
+    Object.entries(sectorKpiEntries).forEach(([sectorId, kpis]) => {
+      const sector = sectors.find(s => s.id === sectorId);
+      if (!sector) return;
+
+      let totalTarget = 0;
+      let totalRealized = 0;
+
+      Object.entries(kpis).forEach(([kpiId, data]) => {
+        const unit = data.kpi?.unit || 'number';
+        const propTarget = getProportionalTarget(sectorId, kpiId, unit);
+        // Se não encontrou meta mensal, fallback para soma de e.target
+        const target = propTarget > 0 ? propTarget : data.entries.reduce((sum, e) => sum + (Number(e.target) || 0), 0);
+
+        if (unit === 'percent') {
+          // Percentuais não somam linearmente entre KPIs, tratar individualmente
+          // Para o gráfico de setor, incluir como contribuição normalizada
+          totalTarget += target;
+          totalRealized += data.realized / Math.max(data.entries.filter(e => e.realized !== null).length, 1); // média do realizado
+        } else {
+          totalTarget += target;
+          totalRealized += data.realized;
+        }
+      });
+
+      result.push({
+        name: sector.name,
+        atingimento: totalTarget > 0 ? Math.round((totalRealized / totalTarget) * 100) : 0,
+        meta: 100
+      });
+    });
+
+    return result.sort((a, b) => b.atingimento - a.atingimento);
+  }, [filteredEntries, sectors, monthlyTargetMap, viewMode, selectedPeriodDaysByMonth]);
 
   // Tendência mensal
   const trendData = useMemo(() => {
@@ -413,7 +540,7 @@ export const Dashboard: React.FC = () => {
   ];
 
   // ==========================================
-  // MÉTRICAS DE KPIs POR SETOR (Aleatórias)
+  // MÉTRICAS DE KPIs POR SETOR (Aleatórias) — com metas proporcionais
   // ==========================================
   const sectorKpiMetrics = useMemo(() => {
     const metrics: Array<{
@@ -428,8 +555,8 @@ export const Dashboard: React.FC = () => {
       trend: 'up' | 'down' | 'neutral';
     }> = [];
 
-    // Agrupar entries por setor e KPI
-    const grouped: Record<string, Record<string, { realized: number; target: number; kpi: KPI; sectorName: string }>> = {};
+    // Agrupar entries por setor e KPI (com entries para cálculo proporcional)
+    const grouped: Record<string, Record<string, { realized: number; kpi: KPI; sectorName: string; sectorId: string; entries: KpiEntry[] }>> = {};
 
     filteredEntries.forEach(e => {
       if (e.realized === null) return;
@@ -438,39 +565,49 @@ export const Dashboard: React.FC = () => {
       const kpi = sector?.kpis.find(k => k.id === e.kpiId);
       if (!sector || !kpi) return;
 
-      const sectorKey = e.sectorId;
-      const kpiKey = e.kpiId;
-
-      if (!grouped[sectorKey]) grouped[sectorKey] = {};
-      if (!grouped[sectorKey][kpiKey]) {
-        grouped[sectorKey][kpiKey] = { 
+      if (!grouped[e.sectorId]) grouped[e.sectorId] = {};
+      if (!grouped[e.sectorId][e.kpiId]) {
+        grouped[e.sectorId][e.kpiId] = { 
           realized: 0, 
-          target: 0, 
           kpi, 
-          sectorName: sector.name 
+          sectorName: sector.name,
+          sectorId: e.sectorId,
+          entries: []
         };
       }
-      grouped[sectorKey][kpiKey].realized += Number(e.realized) || 0;
-      grouped[sectorKey][kpiKey].target += Number(e.target) || 0;
+      grouped[e.sectorId][e.kpiId].realized += Number(e.realized) || 0;
+      grouped[e.sectorId][e.kpiId].entries.push(e);
     });
 
-    // Coletar todos os KPIs disponíveis de todos os setores
-    const allKpis: Array<{ realized: number; target: number; kpi: KPI; sectorName: string }> = [];
+    // Coletar todos os KPIs com meta proporcional calculada
+    const allKpis: Array<{ realized: number; target: number; kpi: KPI; sectorName: string; sectorId: string }> = [];
     Object.entries(grouped).forEach(([sectorId, kpis]) => {
-      Object.values(kpis).forEach(kpiData => {
-        allKpis.push(kpiData);
+      Object.entries(kpis).forEach(([kpiId, data]) => {
+        const propTarget = getProportionalTarget(sectorId, kpiId, data.kpi.unit);
+        const fallbackTarget = data.entries.reduce((sum, e) => sum + (Number(e.target) || 0), 0);
+        const target = propTarget > 0 ? propTarget : fallbackTarget;
+        // Para percentuais, usar média do realizado
+        const realizedValue = data.kpi.unit === 'percent'
+          ? data.realized / Math.max(data.entries.length, 1)
+          : data.realized;
+        allKpis.push({
+          realized: realizedValue,
+          target,
+          kpi: data.kpi,
+          sectorName: data.sectorName,
+          sectorId
+        });
       });
     });
 
     // Selecionar 6 KPIs distribuídos, priorizando variedade de setores
     const sectorIds = Object.keys(grouped);
-    const selectedKpis: Array<{ realized: number; target: number; kpi: KPI; sectorName: string }> = [];
+    const selectedKpis: typeof allKpis = [];
     let sectorIndex = 0;
     
-    // Primeiro, pegar 1 KPI de cada setor (round-robin)
     while (selectedKpis.length < 6 && sectorIndex < sectorIds.length) {
       const sectorId = sectorIds[sectorIndex];
-      const sectorKpis = Object.values(grouped[sectorId]);
+      const sectorKpis = allKpis.filter(k => k.sectorId === sectorId);
       if (sectorKpis.length > 0) {
         const randomKpi = sectorKpis[Math.floor(Math.random() * sectorKpis.length)];
         selectedKpis.push(randomKpi);
@@ -478,7 +615,6 @@ export const Dashboard: React.FC = () => {
       sectorIndex++;
     }
     
-    // Se ainda não temos 6, pegar mais KPIs dos setores que têm mais
     if (selectedKpis.length < 6) {
       const remaining = allKpis.filter(k => !selectedKpis.includes(k));
       const shuffled = remaining.sort(() => Math.random() - 0.5);
@@ -487,16 +623,15 @@ export const Dashboard: React.FC = () => {
       }
     }
     
-    // Processar os KPIs selecionados
-    selectedKpis.forEach(randomKpi => {
-      const { realized, target, kpi, sectorName } = randomKpi;
+    selectedKpis.forEach(item => {
+      const { realized, target, kpi, sectorName } = item;
         
-        let percentage: number;
-        if (kpi.isInverse) {
-          percentage = target !== 0 ? Math.round(((target - realized) / target + 1) * 100) : 0;
-        } else {
-          percentage = target !== 0 ? Math.round((realized / target) * 100) : 0;
-        }
+      let percentage: number;
+      if (kpi.isInverse) {
+        percentage = target !== 0 ? Math.round(((target - realized) / target + 1) * 100) : 0;
+      } else {
+        percentage = target !== 0 ? Math.round((realized / target) * 100) : 0;
+      }
 
       metrics.push({
         sectorName,
@@ -512,7 +647,147 @@ export const Dashboard: React.FC = () => {
     });
 
     return metrics;
-  }, [filteredEntries, sectors]);
+  }, [filteredEntries, sectors, monthlyTargetMap, viewMode, selectedPeriodDaysByMonth]);
+
+  // ==========================================
+  // TODOS OS KPIs AGRUPADOS POR SETOR
+  // ==========================================
+  const allSectorKpiData = useMemo(() => {
+    // Agrupar entries por setor e KPI
+    const grouped: Record<string, Record<string, { realized: number; count: number; kpi: KPI; entries: KpiEntry[] }>> = {};
+
+    filteredEntries.forEach(e => {
+      const sector = sectors.find(s => s.id === e.sectorId);
+      const kpi = sector?.kpis.find(k => k.id === e.kpiId);
+      if (!sector || !kpi) return;
+
+      const sectorKey = e.sectorId;
+      const kpiKey = e.kpiId;
+
+      if (!grouped[sectorKey]) grouped[sectorKey] = {};
+      if (!grouped[sectorKey][kpiKey]) {
+        grouped[sectorKey][kpiKey] = { realized: 0, count: 0, kpi, entries: [] };
+      }
+      grouped[sectorKey][kpiKey].entries.push(e);
+      if (e.realized !== null) {
+        grouped[sectorKey][kpiKey].realized += Number(e.realized) || 0;
+        grouped[sectorKey][kpiKey].count += 1;
+      }
+    });
+
+    // Transformar em array estruturado
+    return sectors
+      .filter(s => {
+        if (filterSector !== 'Todos' && s.id !== filterSector) return false;
+        return !!grouped[s.id];
+      })
+      .map(sector => {
+        const sectorKpis = grouped[sector.id] || {};
+        const kpiList = Object.entries(sectorKpis).map(([kpiId, data]) => {
+          const { realized, kpi, count, entries: kpiEntries } = data;
+          const totalEntries = kpiEntries.length;
+          const filledEntries = kpiEntries.filter(e => e.realized !== null).length;
+
+          // Meta proporcional ao período selecionado
+          const propTarget = getProportionalTarget(sector.id, kpiId, kpi.unit);
+          // Fallback: soma dos targets das entries (caso não exista MonthlyTarget cadastrada)
+          const fallbackTarget = kpiEntries.reduce((sum, e) => sum + (Number(e.target) || 0), 0);
+          const target = propTarget > 0 ? propTarget : fallbackTarget;
+
+          // Para percentuais, usar média do realizado ao invés de soma
+          const adjustedRealized = kpi.unit === 'percent' && count > 0
+            ? realized / count
+            : realized;
+
+          const gap = adjustedRealized - target;
+
+          let percentage: number;
+          if (kpi.isInverse) {
+            percentage = target !== 0 ? Math.round(((target - adjustedRealized) / target + 1) * 100) : 0;
+          } else {
+            percentage = target !== 0 ? Math.round((adjustedRealized / target) * 100) : 0;
+          }
+
+          let status: 'on-track' | 'warning' | 'critical' | 'no-data';
+          if (count === 0) {
+            status = 'no-data';
+          } else if (kpi.isInverse) {
+            status = gap <= 0 ? 'on-track' : gap < target * 0.1 ? 'warning' : 'critical';
+          } else {
+            status = percentage >= 100 ? 'on-track' : percentage >= 90 ? 'warning' : 'critical';
+          }
+
+          return {
+            kpiId,
+            kpiName: kpi.name,
+            unit: kpi.unit,
+            format: kpi.format || '',
+            isInverse: kpi.isInverse || false,
+            realized: adjustedRealized,
+            target,
+            gap,
+            percentage,
+            status,
+            count,
+            totalEntries,
+            filledEntries,
+            fillRate: totalEntries > 0 ? Math.round((filledEntries / totalEntries) * 100) : 0
+          };
+        });
+
+        // Performance geral do setor
+        const sectorTotalTarget = kpiList.reduce((sum, k) => sum + k.target, 0);
+        const sectorTotalRealized = kpiList.reduce((sum, k) => sum + k.realized, 0);
+        const sectorPercentage = sectorTotalTarget > 0 ? Math.round((sectorTotalRealized / sectorTotalTarget) * 100) : 0;
+        const kpisOnTrack = kpiList.filter(k => k.status === 'on-track').length;
+        const kpisTotal = kpiList.filter(k => k.status !== 'no-data').length;
+
+        return {
+          sectorId: sector.id,
+          sectorName: sector.name,
+          kpis: kpiList.sort((a, b) => {
+            const order = { 'critical': 0, 'warning': 1, 'on-track': 2, 'no-data': 3 };
+            return order[a.status] - order[b.status];
+          }),
+          sectorPercentage,
+          kpisOnTrack,
+          kpisTotal
+        };
+      })
+      .sort((a, b) => a.sectorPercentage - b.sectorPercentage);
+  }, [filteredEntries, sectors, filterSector, monthlyTargetMap, viewMode, selectedPeriodDaysByMonth]);
+
+  // State para controlar setores expandidos
+  const [expandedSectors, setExpandedSectors] = useState<Record<string, boolean>>({});
+
+  // Inicializar todos expandidos quando dados mudam
+  useEffect(() => {
+    const initial: Record<string, boolean> = {};
+    allSectorKpiData.forEach(s => { initial[s.sectorId] = true; });
+    setExpandedSectors(initial);
+  }, [allSectorKpiData.length]);
+
+  const toggleSector = (sectorId: string) => {
+    setExpandedSectors(prev => ({ ...prev, [sectorId]: !prev[sectorId] }));
+  };
+
+  const toggleAllSectors = () => {
+    const allExpanded = allSectorKpiData.every(s => expandedSectors[s.sectorId]);
+    const newState: Record<string, boolean> = {};
+    allSectorKpiData.forEach(s => { newState[s.sectorId] = !allExpanded; });
+    setExpandedSectors(newState);
+  };
+
+  // Formatar valor completo (sem abreviação)
+  const formatFullValue = (value: number, unit: string, format: string) => {
+    if (unit === 'currency') {
+      return `${format}${value.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    if (unit === 'percent') {
+      return `${value.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}${format}`;
+    }
+    return `${format}${value.toLocaleString('pt-BR')}`;
+  };
 
   // Formatar valor baseado na unidade
   const formatValue = (value: number, unit: string, format: string) => {
@@ -1027,6 +1302,212 @@ export const Dashboard: React.FC = () => {
               <div className="text-xs text-zinc-500 dark:text-zinc-400 font-medium uppercase tracking-wide">Stand By</div>
             </div>
           </div>
+
+          {/* ==========================================
+              DETALHAMENTO: TODOS OS KPIs POR SETOR
+              ========================================== */}
+          {allSectorKpiData.length > 0 && (
+            <div className="space-y-4">
+              {/* Header da seção */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Layers className="w-5 h-5 text-zinc-400" />
+                  <h3 className="text-lg font-semibold text-zinc-900 dark:text-white">
+                    Detalhamento de KPIs por Setor
+                  </h3>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    ({allSectorKpiData.reduce((sum, s) => sum + s.kpis.length, 0)} indicadores)
+                  </span>
+                </div>
+                <button
+                  onClick={toggleAllSectors}
+                  className="text-xs text-zinc-500 dark:text-zinc-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors font-medium"
+                >
+                  {allSectorKpiData.every(s => expandedSectors[s.sectorId]) ? 'Recolher Todos' : 'Expandir Todos'}
+                </button>
+              </div>
+
+              {/* Setores */}
+              {allSectorKpiData.map(sectorData => (
+                <div
+                  key={sectorData.sectorId}
+                  className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-700 shadow-sm overflow-hidden"
+                >
+                  {/* Header do setor (clicável) */}
+                  <button
+                    onClick={() => toggleSector(sectorData.sectorId)}
+                    className="w-full flex items-center justify-between px-5 py-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {expandedSectors[sectorData.sectorId]
+                        ? <ChevronDown className="w-5 h-5 text-zinc-400" />
+                        : <ChevronRight className="w-5 h-5 text-zinc-400" />
+                      }
+                      <Building2 className="w-5 h-5 text-amber-500" />
+                      <span className="text-base font-semibold text-zinc-900 dark:text-white">
+                        {sectorData.sectorName}
+                      </span>
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {sectorData.kpis.length} KPI{sectorData.kpis.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {/* Badge de KPIs batidos */}
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                          {sectorData.kpisOnTrack}
+                        </span>
+                        <span className="text-zinc-400">/</span>
+                        <span className="text-zinc-600 dark:text-zinc-300">
+                          {sectorData.kpisTotal}
+                        </span>
+                        <span className="text-xs text-zinc-500">batidos</span>
+                      </div>
+                      {/* Barra de progresso do setor */}
+                      <div className="w-24 hidden sm:block">
+                        <div className="w-full bg-zinc-200 dark:bg-zinc-700 rounded-full h-2">
+                          <div
+                            className={`h-2 rounded-full transition-all duration-500 ${
+                              sectorData.sectorPercentage >= 100
+                                ? 'bg-emerald-500'
+                                : sectorData.sectorPercentage >= 90
+                                ? 'bg-amber-500'
+                                : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(sectorData.sectorPercentage, 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                      <span className={`text-sm font-bold min-w-[3rem] text-right ${
+                        sectorData.sectorPercentage >= 100
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : sectorData.sectorPercentage >= 90
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        {sectorData.sectorPercentage}%
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Tabela de KPIs */}
+                  {expandedSectors[sectorData.sectorId] && (
+                    <div className="border-t border-zinc-200 dark:border-zinc-700">
+                      {/* Header da tabela */}
+                      <div className="grid grid-cols-12 gap-2 px-5 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                        <div className="col-span-3">Indicador</div>
+                        <div className="col-span-2 text-right">Meta Acum.</div>
+                        <div className="col-span-2 text-right">Realizado Acum.</div>
+                        <div className="col-span-1 text-right">Gap</div>
+                        <div className="col-span-2 text-center">Atingimento</div>
+                        <div className="col-span-2 text-center">Preenchimento</div>
+                      </div>
+
+                      {/* Rows */}
+                      {sectorData.kpis.map((kpi, kpiIdx) => (
+                        <div
+                          key={kpi.kpiId}
+                          className={`grid grid-cols-12 gap-2 px-5 py-3 items-center text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/30 ${
+                            kpiIdx !== sectorData.kpis.length - 1 ? 'border-b border-zinc-100 dark:border-zinc-800' : ''
+                          }`}
+                        >
+                          {/* Nome do KPI */}
+                          <div className="col-span-3 flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                              kpi.status === 'on-track' ? 'bg-emerald-500' :
+                              kpi.status === 'warning' ? 'bg-amber-500' :
+                              kpi.status === 'critical' ? 'bg-red-500' : 'bg-zinc-400'
+                            }`} />
+                            <span
+                              className="text-zinc-800 dark:text-zinc-200 font-medium truncate"
+                              title={kpi.kpiName}
+                            >
+                              {kpi.kpiName}
+                            </span>
+                            {kpi.isInverse && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded font-medium flex-shrink-0">
+                                INV
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Meta Acumulada */}
+                          <div className="col-span-2 text-right text-zinc-600 dark:text-zinc-400">
+                            {kpi.count === 0 ? '—' : formatFullValue(kpi.target, kpi.unit, kpi.format)}
+                          </div>
+
+                          {/* Realizado Acumulado */}
+                          <div className="col-span-2 text-right font-medium text-zinc-900 dark:text-white">
+                            {kpi.count === 0 ? '—' : formatFullValue(kpi.realized, kpi.unit, kpi.format)}
+                          </div>
+
+                          {/* Gap */}
+                          <div className={`col-span-1 text-right text-xs font-medium ${
+                            kpi.count === 0 ? 'text-zinc-400' :
+                            kpi.isInverse
+                              ? (kpi.gap <= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
+                              : (kpi.gap >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
+                          }`}>
+                            {kpi.count === 0 ? '—' : (
+                              <>
+                                {kpi.isInverse
+                                  ? (kpi.gap <= 0 ? '' : '+')
+                                  : (kpi.gap >= 0 ? '+' : '')
+                                }
+                                {formatFullValue(Math.abs(kpi.gap), kpi.unit, kpi.format)}
+                              </>
+                            )}
+                          </div>
+
+                          {/* Atingimento % */}
+                          <div className="col-span-2 flex items-center justify-center gap-2">
+                            {kpi.count === 0 ? (
+                              <span className="text-zinc-400 text-xs">Sem dados</span>
+                            ) : (
+                              <>
+                                <div className="w-16 bg-zinc-200 dark:bg-zinc-700 rounded-full h-1.5">
+                                  <div
+                                    className={`h-1.5 rounded-full transition-all duration-500 ${
+                                      kpi.status === 'on-track' ? 'bg-emerald-500' :
+                                      kpi.status === 'warning' ? 'bg-amber-500' : 'bg-red-500'
+                                    }`}
+                                    style={{ width: `${Math.min(kpi.percentage, 100)}%` }}
+                                  />
+                                </div>
+                                <span className={`text-xs font-bold min-w-[2.5rem] text-right ${
+                                  kpi.status === 'on-track' ? 'text-emerald-600 dark:text-emerald-400' :
+                                  kpi.status === 'warning' ? 'text-amber-600 dark:text-amber-400' :
+                                  'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {kpi.percentage}%
+                                </span>
+                              </>
+                            )}
+                          </div>
+
+                          {/* Preenchimento */}
+                          <div className="col-span-2 flex items-center justify-center gap-2">
+                            <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {kpi.filledEntries}/{kpi.totalEntries}
+                            </span>
+                            <div className="w-12 bg-zinc-200 dark:bg-zinc-700 rounded-full h-1.5">
+                              <div
+                                className="h-1.5 rounded-full bg-zinc-400 dark:bg-zinc-500 transition-all duration-500"
+                                style={{ width: `${kpi.fillRate}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] text-zinc-400">
+                              {kpi.fillRate}%
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>
