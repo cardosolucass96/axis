@@ -54,10 +54,15 @@ export async function generateDailyReport(): Promise<string> {
     const users = await userRepo.find();
 
     const now = new Date();
-    const dateStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = `${String(yesterday.getDate()).padStart(2, "0")}/${String(yesterday.getMonth() + 1).padStart(2, "0")}/${yesterday.getFullYear()}`;
+    const todayStr = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
 
     let report = `📊 *RELATÓRIO DIÁRIO AXIS*\n`;
-    report += `📅 ${dateStr} • ${month}${week ? ` • ${week}` : ""}\n`;
+    report += `📅 Preenchimento referente a *${yesterdayStr}*\n`;
+    report += `${month}${week ? ` • ${week}` : ""}\n`;
+    report += `\nVerifique se os KPIs de ontem foram preenchidos.\n`;
     report += `━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
     let totalKpis = 0;
