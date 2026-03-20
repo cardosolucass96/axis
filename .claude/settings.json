@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(find /home/lucas-cardoso/Documents/projetos/axis -path */.github/* -type f)",
+      "Bash(cat /home/lucas-cardoso/Documents/projetos/axis/.env*)"
+    ]
+  }
+}

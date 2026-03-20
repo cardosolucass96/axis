@@ -84,9 +84,10 @@ export const ActionPlansPage: React.FC = () => {
         dataService.getSectors()
       ]);
       
-      // Se for líder, filtrar apenas planos do seu setor
-      const filteredPlans = user?.role === 'leader' && user?.sectorId
-        ? plansData.filter(plan => plan.sectorId === user.sectorId)
+      // Se for líder, filtrar apenas planos dos seus setores
+      const userSectorIds = user?.sectorIds || [];
+      const filteredPlans = user?.role === 'leader' && userSectorIds.length > 0
+        ? plansData.filter(plan => userSectorIds.includes(plan.sectorId))
         : plansData;
       
       setPlans(filteredPlans);

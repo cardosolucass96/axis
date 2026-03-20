@@ -131,9 +131,9 @@ export const api = {
         update: (id: string, user: any) =>
             request<any>("PUT", `/users/${id}`, { body: user }),
         delete: (id: string) => request<void>("DELETE", `/users/${id}`),
-        linkSector: (userId: string, sectorId: string) =>
+        linkSector: (userId: string, sectorIds: string[]) =>
             request<any>("POST", `/users/${userId}/link-sector`, {
-                body: { sectorId },
+                body: { sectorIds },
             }),
     },
 
@@ -232,6 +232,11 @@ export const api = {
         delete: (id: string) => request<void>("DELETE", `/monthly-targets/${id}`),
         distribute: (data: { sectorId: string; kpiId: string; month: string; target: number }) =>
             request<any>("POST", "/monthly-targets/distribute", { body: data }),
+    },
+
+    // ===== REPORT =====
+    report: {
+        send: () => request<{ status: string; message: string }>("POST", "/report/send"),
     },
 
     // ===== HEALTH =====

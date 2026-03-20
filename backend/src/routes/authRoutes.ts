@@ -69,6 +69,9 @@ export async function authRoutes(app: FastifyInstance) {
                         name: existingUser.name,
                         role: existingUser.role
                     });
+                    // sectorIds é um array no entity, converter para JSON para auth DB
+                    const sectorIdsJson = existingUser.sectorIds && existingUser.sectorIds.length > 0
+                        ? JSON.stringify(existingUser.sectorIds) : null;
                     user = {
                         id: existingUser.id,
                         email: existingUser.email,
@@ -78,7 +81,7 @@ export async function authRoutes(app: FastifyInstance) {
                         google_id: null,
                         password_hash: null,
                         email_verified: 0,
-                        sector_id: existingUser.sectorId || null
+                        sector_id: sectorIdsJson
                     };
                 } else {
                     return reply.status(404).send({ error: "Usuário de desenvolvimento não encontrado" });
@@ -520,6 +523,8 @@ export async function authRoutes(app: FastifyInstance) {
                         });
                         // Busca password_hash da tabela de auth
                         const authUser = getUserByEmail(existingUser.email);
+                        const sectorIdsJsonGoogle = existingUser.sectorIds && existingUser.sectorIds.length > 0
+                            ? JSON.stringify(existingUser.sectorIds) : null;
                         user = {
                             id: existingUser.id,
                             email: existingUser.email,
@@ -529,7 +534,7 @@ export async function authRoutes(app: FastifyInstance) {
                             google_id: googleUser.sub,
                             password_hash: authUser?.password_hash || null,
                             email_verified: 1,
-                            sector_id: existingUser.sectorId || null
+                            sector_id: sectorIdsJsonGoogle
                         };
                     } else {
                         // Cria novo usuário (login pela primeira vez)
@@ -627,7 +632,7 @@ export async function authRoutes(app: FastifyInstance) {
                 name: user.name,
                 role: user.role,
                 avatarUrl: user.avatarUrl,
-                sectorId: user.sectorId
+                sectorIds: user.sectorIds || []
             };
         } catch (error) {
             console.error("Erro ao validar sessão:", error);

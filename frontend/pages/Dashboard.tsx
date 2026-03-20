@@ -104,9 +104,10 @@ export const Dashboard: React.FC = () => {
       // Mês padrão para modo mês (mesmo formato do banco: apenas nome)
       setSelectedMonth(currentMonth.month);
 
-      // Se for líder, filtrar pelo seu setor
-      if (user?.role === 'leader' && user?.sectorId) {
-        setFilterSector(user.sectorId);
+      // Se for líder com apenas 1 setor, pré-selecionar
+      const userSectorIds = user?.sectorIds || [];
+      if (user?.role === 'leader' && userSectorIds.length === 1) {
+        setFilterSector(userSectorIds[0]);
       }
 
       setInitialFiltersSet(true);
@@ -124,9 +125,10 @@ export const Dashboard: React.FC = () => {
           dataService.getMonthlyTargets()
         ]);
         
-        // Se for líder, filtrar entries pelo seu setor
-        const filteredByRole = user?.role === 'leader' && user?.sectorId
-          ? entriesData.filter(e => e.sectorId === user.sectorId)
+        // Se for líder, filtrar entries pelos seus setores
+        const userSectorIds = user?.sectorIds || [];
+        const filteredByRole = user?.role === 'leader' && userSectorIds.length > 0
+          ? entriesData.filter(e => userSectorIds.includes(e.sectorId))
           : entriesData;
         
         setEntries(filteredByRole);
@@ -153,8 +155,9 @@ export const Dashboard: React.FC = () => {
       try {
         setIsDayLoading(true);
         const data = await dataService.getEntries(undefined, undefined, undefined, startWeek);
-        const filteredByRole = user?.role === 'leader' && user?.sectorId
-          ? data.filter((e: KpiEntry) => e.sectorId === user.sectorId)
+        const userSectorIds2 = user?.sectorIds || [];
+        const filteredByRole = user?.role === 'leader' && userSectorIds2.length > 0
+          ? data.filter((e: KpiEntry) => userSectorIds2.includes(e.sectorId))
           : data;
         setAllWeekEntries(filteredByRole);
       } catch (err) {
@@ -169,8 +172,9 @@ export const Dashboard: React.FC = () => {
 
   // Setores disponíveis para filtro
   const availableSectors = useMemo(() => {
-    if (user?.role === 'leader' && user?.sectorId) {
-      return sectors.filter(s => s.id === user.sectorId);
+    const userSectorIds = user?.sectorIds || [];
+    if (user?.role === 'leader' && userSectorIds.length > 0) {
+      return sectors.filter(s => userSectorIds.includes(s.id));
     }
     return sectors;
   }, [sectors, user]);

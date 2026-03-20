@@ -117,8 +117,8 @@ export const UserManagementPage: React.FC = () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 text-zinc-600 dark:text-zinc-400">
-                  {user.sectorId
-                    ? sectors.find(s => s.id === user.sectorId)?.name || 'Setor Removido'
+                  {user.sectorIds && user.sectorIds.length > 0
+                    ? user.sectorIds.map(sid => sectors.find(s => s.id === sid)?.name || 'Setor Removido').join(', ')
                     : <span className="text-zinc-400 italic">Todos / Nenhum</span>}
                 </td>
                 <td className="px-6 py-4 text-right">
@@ -177,15 +177,37 @@ export const UserManagementPage: React.FC = () => {
             ]}
           />
 
-          <Select
-            label="Setor Responsável (Opcional)"
-            value={editingUser.sectorId || ''}
-            onChange={e => setEditingUser({ ...editingUser, sectorId: e.target.value })}
-            options={[
-              { value: '', label: 'Sem restrição / Geral' },
-              ...sectors.map(s => ({ value: s.id, label: s.name }))
-            ]}
-          />
+          <div>
+            <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
+              Setores Responsáveis (Opcional)
+            </label>
+            <div className="space-y-2 max-h-48 overflow-y-auto p-3 bg-zinc-50 dark:bg-zinc-800 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              {sectors.map(s => {
+                const isChecked = (editingUser.sectorIds || []).includes(s.id);
+                return (
+                  <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-700 rounded px-2 py-1.5 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        const current = editingUser.sectorIds || [];
+                        const updated = isChecked
+                          ? current.filter(id => id !== s.id)
+                          : [...current, s.id];
+                        setEditingUser({ ...editingUser, sectorIds: updated });
+                      }}
+                      className="w-4 h-4 text-amber-500 border-zinc-300 rounded focus:ring-amber-500"
+                    />
+                    <span className="text-sm text-zinc-700 dark:text-zinc-300">{s.name}</span>
+                  </label>
+                );
+              })}
+              {sectors.length === 0 && (
+                <span className="text-sm text-zinc-400 italic">Nenhum setor cadastrado</span>
+              )}
+            </div>
+            <p className="text-xs text-zinc-500 mt-1">Selecione um ou mais setores. Sem seleção = acesso geral.</p>
+          </div>
         </div>
       </Modal>
     </div>

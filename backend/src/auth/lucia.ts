@@ -85,13 +85,22 @@ export const lucia = new Lucia(adapter, {
         }
     },
     getUserAttributes: (attributes) => {
+        // Parse sector_id: pode ser JSON array ou UUID simples (backward compat)
+        let sectorIds: string[] = [];
+        if (attributes.sector_id) {
+            if (attributes.sector_id.startsWith("[")) {
+                try { sectorIds = JSON.parse(attributes.sector_id); } catch { sectorIds = [attributes.sector_id]; }
+            } else {
+                sectorIds = [attributes.sector_id];
+            }
+        }
         return {
             email: attributes.email,
             name: attributes.name,
             role: attributes.role,
             avatarUrl: attributes.avatar_url,
             googleId: attributes.google_id,
-            sectorId: attributes.sector_id
+            sectorIds
         };
     }
 });

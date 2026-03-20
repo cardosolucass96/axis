@@ -20,7 +20,7 @@ export class UserService {
         name: string;
         email: string;
         role: "admin" | "leader";
-        sectorId?: string;
+        sectorIds?: string[];
     }): Promise<User> {
         // Check if user already exists
         const existing = await this.userRepository.findByEmail(data.email);
@@ -52,13 +52,13 @@ export class UserService {
         return await this.userRepository.delete(id);
     }
 
-    async linkUserToSector(userId: string, sectorId: string): Promise<User | null> {
+    async linkUserToSectors(userId: string, sectorIds: string[]): Promise<User | null> {
         const user = await this.userRepository.findById(userId);
         if (!user) {
             throw new Error("Usuário não encontrado");
         }
 
-        return await this.userRepository.update(userId, { sectorId });
+        return await this.userRepository.update(userId, { sectorIds });
     }
 
     async getUsersBySector(sectorId: string): Promise<User[]> {

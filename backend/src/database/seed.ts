@@ -81,10 +81,10 @@ async function seed() {
         // 3. CRIAR LÍDERES (vinculados aos setores)
         // ==========================================
         const leaders = await userRepository.save([
-            { name: "Allef Medina", email: "allef@grupovorp.com", role: "leader", avatarInitials: "AM", sectorId: sectors[0].id },
-            { name: "Laís Santiago", email: "lais.ferreira@grupovorp.com", role: "leader", avatarInitials: "LS", sectorId: sectors[1].id },
-            { name: "Analu Teixeira", email: "analu@grupovorp.com", role: "leader", avatarInitials: "AT", sectorId: sectors[2].id },
-            { name: "Marcos Nunes", email: "marcos.nunes@grupovorp.com", role: "leader", avatarInitials: "MN", sectorId: sectors[3].id },
+            { name: "Allef Medina", email: "allef@grupovorp.com", role: "leader", avatarInitials: "AM", sectorIds: [sectors[0].id] },
+            { name: "Laís Santiago", email: "lais.ferreira@grupovorp.com", role: "leader", avatarInitials: "LS", sectorIds: [sectors[1].id] },
+            { name: "Analu Teixeira", email: "analu@grupovorp.com", role: "leader", avatarInitials: "AT", sectorIds: [sectors[2].id] },
+            { name: "Marcos Nunes", email: "marcos.nunes@grupovorp.com", role: "leader", avatarInitials: "MN", sectorIds: [sectors[3].id] },
         ]);
 
         console.log("✅ Líderes criados:", leaders.length);
@@ -95,10 +95,12 @@ async function seed() {
         const passwordHash = await bcryptjs.hash(defaultPassword, 10);
 
         for (const user of users) {
+            const sectorIdsJson = user.sectorIds && user.sectorIds.length > 0
+                ? JSON.stringify(user.sectorIds) : null;
             authDb.prepare(`
                 INSERT OR REPLACE INTO user (id, email, name, role, avatar_url, password_hash, sector_id, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(user.id, user.email, user.name, user.role, null, passwordHash, user.sectorId || null, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000));
+            `).run(user.id, user.email, user.name, user.role, null, passwordHash, sectorIdsJson, Math.floor(Date.now() / 1000), Math.floor(Date.now() / 1000));
         }
 
         console.log("🔐 Senhas padrão criadas (Vorp@123)");
@@ -184,8 +186,10 @@ async function seed() {
         // Responsáveis por setor (usa os líderes criados)
         const sectorLeaders: Record<string, string> = {};
         for (const leader of leaders) {
-            if (leader.sectorId) {
-                sectorLeaders[leader.sectorId] = leader.name;
+            if (leader.sectorIds && leader.sectorIds.length > 0) {
+                for (const sid of leader.sectorIds) {
+                    sectorLeaders[sid] = leader.name;
+                }
             }
         }
 

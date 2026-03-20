@@ -53,7 +53,7 @@ export async function userRoutes(app: FastifyInstance) {
                 name: body.name,
                 email: body.email,
                 role: body.role,
-                sectorId: body.sectorId,
+                sectorIds: body.sectorIds || (body.sectorId ? [body.sectorId] : []),
             });
 
             return reply.code(201).send({
@@ -120,14 +120,17 @@ export async function userRoutes(app: FastifyInstance) {
         }
     });
 
-    // POST /users/:userId/link-sector - Vincular usuário a setor
+    // POST /users/:userId/link-sector - Vincular usuário a setores
     app.post("/users/:userId/link-sector", async (request, reply) => {
         try {
             const { userId } = request.params as { userId: string };
-            const { sectorId } = request.body as { sectorId: string };
-            
-            const user = await userService.linkUserToSector(userId, sectorId);
-            
+            const body = request.body as { sectorId?: string; sectorIds?: string[] };
+
+            // Suporta tanto sectorId (string) quanto sectorIds (array) para backward compat
+            const sectorIds = body.sectorIds || (body.sectorId ? [body.sectorId] : []);
+
+            const user = await userService.linkUserToSectors(userId, sectorIds);
+
             if (!user) {
                 return reply.code(404).send({
                     status: "error",

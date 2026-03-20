@@ -8,7 +8,7 @@ export interface User {
   email: string;
   role: UserRole;
   avatarInitials: string;
-  sectorId?: string; // Opcional, para vincular lider a um setor
+  sectorIds?: string[]; // Setores vinculados ao líder (pode ser múltiplos)
 }
 
 export interface FiveWTwoH {

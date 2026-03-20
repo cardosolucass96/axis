@@ -6,10 +6,11 @@ import { FiveWhys } from '../components/FiveWhys';
 import { FiveWTwoHInput } from '../components/FiveWTwoH';
 import { MonthlyTargetConfig } from '../components/MonthlyTargetConfig';
 import { LoadingSpinner, EmptyState } from '../components/ui';
-import { 
-  ChevronDown, ChevronRight, Save, AlertTriangle, Check, Loader2, 
-  Download, Settings, X, Calendar, CalendarDays
+import {
+  ChevronDown, ChevronRight, Save, AlertTriangle, Check, Loader2,
+  Download, Settings, X, Calendar, CalendarDays, Send
 } from 'lucide-react';
+import { api } from '../src/services/api';
 import { getWeeksForMonth, getCurrentMonth, getCurrentWeek, getDaysInWeek, getDaysArrayForWeek, extractDayRange } from '../utils/weekCalculator';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -32,6 +33,8 @@ export const DataEntryPage: React.FC = () => {
   const [monthlyTargets, setMonthlyTargets] = useState<Record<string, number>>({});
   const [expandedKpi, setExpandedKpi] = useState<string | null>(null);
   const [showTargetConfig, setShowTargetConfig] = useState(false);
+  const [isSendingReport, setIsSendingReport] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
 
   // Contador de requisições para evitar race conditions
   const loadRequestCounter = React.useRef(0);
@@ -88,18 +91,21 @@ export const DataEntryPage: React.FC = () => {
           dataService.getUsers()
         ]);
         
-        const filteredSectors = user?.role === 'leader' && user?.sectorId
-          ? sectorsData.filter(s => s.id === user.sectorId)
+        const userSectorIds = user?.sectorIds || [];
+        const filteredSectors = user?.role === 'leader' && userSectorIds.length > 0
+          ? sectorsData.filter(s => userSectorIds.includes(s.id))
           : sectorsData;
-        
+
         setSectors(filteredSectors);
         setAvailableUsers(usersData);
-        
+
         if (!selectedSector) {
           if (user?.role === 'admin') {
             setSelectedSector('Todos');
-          } else if (filteredSectors.length > 0) {
-            setSelectedSector(user?.sectorId || filteredSectors[0].id);
+          } else if (filteredSectors.length > 1) {
+            setSelectedSector('Todos');
+          } else if (filteredSectors.length === 1) {
+            setSelectedSector(filteredSectors[0].id);
           }
         }
       } catch (error) {
@@ -379,6 +385,21 @@ export const DataEntryPage: React.FC = () => {
     return names[date.getDay()];
   };
 
+  const handleSendReport = async () => {
+    if (isSendingReport) return;
+    setIsSendingReport(true);
+    try {
+      await api.report.send();
+      setReportSent(true);
+      setTimeout(() => setReportSent(false), 3000);
+    } catch (error) {
+      console.error('Erro ao enviar relatório:', error);
+      alert('Erro ao enviar relatório. Tente novamente.');
+    } finally {
+      setIsSendingReport(false);
+    }
+  };
+
   if (isLoading) {
     return <LoadingSpinner message="Carregando KPIs..." />;
   }
@@ -414,6 +435,16 @@ export const DataEntryPage: React.FC = () => {
           <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="w-4 h-4" />
           </Button>
+          <Button
+            variant={reportSent ? "ghost" : "outline"}
+            size="sm"
+            onClick={handleSendReport}
+            disabled={isSendingReport}
+            title="Enviar relatório via WhatsApp"
+          >
+            {isSendingReport ? <Loader2 className="w-4 h-4 animate-spin" /> : reportSent ? <Check className="w-4 h-4 text-emerald-500" /> : <Send className="w-4 h-4" />}
+            {reportSent ? 'Enviado' : 'WhatsApp'}
+          </Button>
         </div>
       </div>
 
@@ -427,7 +458,7 @@ export const DataEntryPage: React.FC = () => {
               onChange={(e) => setSelectedSector(e.target.value)}
               className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-1.5 pr-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 focus:ring-2 focus:ring-amber-500"
             >
-              {user?.role === 'admin' && <option value="Todos">Todos Setores</option>}
+              {(user?.role === 'admin' || sectors.length > 1) && <option value="Todos">Todos Setores</option>}
               {sectors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>

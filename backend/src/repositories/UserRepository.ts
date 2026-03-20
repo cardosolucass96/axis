@@ -36,6 +36,9 @@ export class UserRepository {
     }
 
     async findBySector(sectorId: string): Promise<User[]> {
-        return await this.repository.find({ where: { sectorId } });
+        // sectorIds é armazenado como JSON array no campo sectorId
+        // Busca usuários que contêm o sectorId no array
+        const allUsers = await this.repository.find();
+        return allUsers.filter(u => u.sectorIds && u.sectorIds.includes(sectorId));
     }
 }

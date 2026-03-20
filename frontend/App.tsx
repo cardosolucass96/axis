@@ -36,7 +36,8 @@ const AppContent: React.FC = () => {
     name: authUser.name,
     email: authUser.email,
     role: authUser.role,
-    avatarInitials: authUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+    avatarInitials: authUser.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    sectorIds: authUser.sectorIds || []
   } : null;
 
   // LoginPage agora é importado de ./pages/Login

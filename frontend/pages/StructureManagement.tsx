@@ -59,7 +59,7 @@ export const StructureManagementPage: React.FC = () => {
 
   const handleEditSector = (sector: Sector) => {
     setEditingSector({ ...sector });
-    const currentLeader = users.find(u => u.sectorId === sector.id);
+    const currentLeader = users.find(u => u.sectorIds && u.sectorIds.includes(sector.id));
     setSelectedLeaderId(currentLeader ? currentLeader.id : '');
     setIsSectorModalOpen(true);
   };
@@ -77,12 +77,16 @@ export const StructureManagementPage: React.FC = () => {
       // 1. Save the Sector
       const savedSector = await dataService.saveSector(newSector);
 
-      // 2. Handle Leader Linking
+      // 2. Handle Leader Linking - adiciona setor aos sectorIds do líder
       if (selectedLeaderId && savedSector.id) {
         const userToLink = users.find(u => u.id === selectedLeaderId);
         if (userToLink) {
-          // Update user to point to this new/edited sector
-          const updatedUser = { ...userToLink, sectorId: savedSector.id };
+          const currentSectorIds = userToLink.sectorIds || [];
+          // Adiciona o setor se ainda não estiver na lista
+          const updatedSectorIds = currentSectorIds.includes(savedSector.id)
+            ? currentSectorIds
+            : [...currentSectorIds, savedSector.id];
+          const updatedUser = { ...userToLink, sectorIds: updatedSectorIds };
           await dataService.updateUser(updatedUser);
         }
       }
@@ -151,7 +155,7 @@ export const StructureManagementPage: React.FC = () => {
 
   // Helper to get users assigned to a sector
   const getSectorUsers = (sectorId: string) => {
-    return users.filter(u => u.sectorId === sectorId);
+    return users.filter(u => u.sectorIds && u.sectorIds.includes(sectorId));
   };
 
   return (

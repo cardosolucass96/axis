@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
+import cron from "node-cron";
 import { AppDataSource } from "./data-source.js";
 import { userRoutes } from "./routes/userRoutes.js";
 import { sectorRoutes, kpiRoutes } from "./routes/sectorRoutes.js";
@@ -11,6 +12,7 @@ import { actionPlanRoutes } from "./routes/actionPlanRoutes.js";
 import { dashboardRoutes } from "./routes/dashboardRoutes.js";
 import { authRoutes } from "./routes/authRoutes.js";
 import { monthlyTargetRoutes } from "./routes/monthlyTargetRoutes.js";
+import { sendDailyReport } from "./services/WhatsAppReportService.js";
 
 // Carregar variáveis de ambiente
 dotenv.config();
@@ -81,6 +83,34 @@ fastify.get("/health", async (request, reply) => {
     };
 });
 
+// Rota para preview do relatório WhatsApp
+fastify.get("/api/report/preview", async (request, reply) => {
+    try {
+        const { generateDailyReport: genReport } = await import("./services/WhatsAppReportService.js");
+        const report = await genReport();
+        return { status: "ok", report };
+    } catch (error: any) {
+        return reply.code(500).send({ status: "error", message: error.message });
+    }
+});
+
+// Rota para enviar o relatório WhatsApp
+fastify.post("/api/report/send", async (request, reply) => {
+    try {
+        const { generateDailyReport: genReport, sendWhatsAppMessage: sendMsg } = await import("./services/WhatsAppReportService.js");
+        const report = await genReport();
+        const success = await sendMsg(report);
+
+        if (!success) {
+            return reply.code(500).send({ status: "error", message: "Falha ao enviar relatório via WhatsApp" });
+        }
+
+        return { status: "ok", message: "Relatório enviado com sucesso" };
+    } catch (error: any) {
+        return reply.code(500).send({ status: "error", message: error.message });
+    }
+});
+
 // Registrar rotas com prefixo /api
 fastify.register(authRoutes, { prefix: "/api" });
 fastify.register(userRoutes, { prefix: "/api" });
@@ -99,6 +129,15 @@ const start = async () => {
         await fastify.listen({ port: PORT, host: HOST });
         console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
         console.log(`📡 CORS habilitado para: ${CORS_ORIGIN.join(", ")}`);
+
+        // Cron job: relatório diário via WhatsApp às 12h (horário de São Paulo)
+        cron.schedule("0 12 * * 1-5", () => {
+            console.log("⏰ Executando relatório diário programado...");
+            sendDailyReport();
+        }, {
+            timezone: "America/Sao_Paulo"
+        });
+        console.log("⏰ Cron job configurado: relatório diário às 12h (seg-sex)");
     } catch (err: any) {
         console.error("❌ Erro ao iniciar servidor:", err?.message || err);
         fastify.log.error(err);

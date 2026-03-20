@@ -23,7 +23,7 @@ interface User {
     name: string;
     role: "admin" | "leader";
     avatarUrl?: string;
-    sectorId?: string; // Setor vinculado ao líder
+    sectorIds?: string[]; // Setores vinculados ao líder
 }
 
 interface AuthResult {
