@@ -73,11 +73,11 @@ const AppContent: React.FC = () => {
       <Routes>
         <Route
           path="/"
-          element={<Navigate to={currentUser.role === 'admin' ? '/dashboard' : '/entry'} replace />}
+          element={<Navigate to="/dashboard" replace />}
         />
         <Route
           path="/dashboard"
-          element={currentUser.role === 'admin' ? <Dashboard /> : <AccessDenied />}
+          element={<Dashboard />}
         />
         <Route path="/entry" element={<DataEntryPage />} />
         <Route path="/actions" element={<ActionPlansPage />} />
@@ -92,7 +92,7 @@ const AppContent: React.FC = () => {
         {/* Rota padrão - redirecionar para dashboard ou entry baseado no role */}
         <Route
           path="*"
-          element={<Navigate to={currentUser.role === 'admin' ? '/dashboard' : '/entry'} replace />}
+          element={<Navigate to="/dashboard" replace />}
         />
       </Routes>
     </Layout>

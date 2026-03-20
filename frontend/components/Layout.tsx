@@ -17,7 +17,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentUser, onLogout 
 
   // Define navigation items with required roles
   const allNavItems = [
-    { id: 'dashboard', label: 'Dashboard CEO', icon: LayoutDashboard, roles: ['admin'] },
+    { id: 'dashboard', label: 'Dashboard CEO', icon: LayoutDashboard, roles: ['admin', 'leader'] },
     { id: 'entry', label: 'Gestão de KPI', icon: PenTool, roles: ['admin', 'leader'] },
     { id: 'actions', label: 'Planos de Ação', icon: ClipboardList, roles: ['admin', 'leader'] },
     { id: 'structure', label: 'Gestão de Estrutura', icon: Settings, roles: ['admin'] },
