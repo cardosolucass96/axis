@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 5173,
         host: '0.0.0.0',
-        strictPort: true,
+        strictPort: false,
         allowedHosts: ['dev.cardosolucas.com', 'localhost']
       },
       plugins: [react()],
