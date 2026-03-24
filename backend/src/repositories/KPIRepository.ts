@@ -19,7 +19,16 @@ export class KPIRepository {
         return await this.repository.find({
             where: { sectorId },
             relations: ["sector"],
+            order: { order: "ASC" },
         });
+    }
+
+    async reorderKPIs(sectorId: string, orderedIds: string[]): Promise<void> {
+        await Promise.all(
+            orderedIds.map((id, index) =>
+                this.repository.update({ id, sectorId }, { order: index })
+            )
+        );
     }
 
     async create(kpi: Partial<KPI>): Promise<KPI> {

@@ -19,6 +19,9 @@ export class KPI {
     @Column({ type: "boolean", default: false })
     isInverse!: boolean; // true = meta de teto (máximo), false = meta de piso (mínimo)
 
+    @Column({ type: "integer", default: 0, name: "sort_order" })
+    order!: number;
+
     @Column({ type: "uuid" })
     sectorId!: string;
 

@@ -135,6 +135,23 @@ export async function sectorRoutes(app: FastifyInstance) {
         }
     });
 
+    // PUT /sectors/:sectorId/kpis/reorder - Reordenar KPIs
+    app.put("/sectors/:sectorId/kpis/reorder", async (request, reply) => {
+        try {
+            const { sectorId } = request.params as { sectorId: string };
+            const { orderedIds } = request.body as { orderedIds: string[] };
+
+            if (!Array.isArray(orderedIds)) {
+                return reply.code(400).send({ status: "error", message: "orderedIds deve ser um array" });
+            }
+
+            await kpiService.reorderKPIs(sectorId, orderedIds);
+            return reply.send({ status: "success", data: null });
+        } catch (error: any) {
+            return reply.code(500).send({ status: "error", message: error.message || "Erro ao reordenar KPIs" });
+        }
+    });
+
     // POST /sectors/:sectorId/kpis - Criar novo KPI
     app.post("/sectors/:sectorId/kpis", async (request, reply) => {
         try {

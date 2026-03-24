@@ -5,13 +5,17 @@ export class SectorRepository {
     private repository = AppDataSource.getRepository(Sector);
 
     async findAll(): Promise<Sector[]> {
-        return await this.repository.find({ relations: ["kpis"] });
+        return await this.repository.find({
+            relations: ["kpis"],
+            order: { kpis: { order: "ASC" } },
+        });
     }
 
     async findById(id: string): Promise<Sector | null> {
         return await this.repository.findOne({
             where: { id },
             relations: ["kpis"],
+            order: { kpis: { order: "ASC" } },
         });
     }
 

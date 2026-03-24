@@ -159,6 +159,8 @@ export const api = {
         update: (id: string, kpi: any) =>
             request<any>("PUT", `/kpis/${id}`, { body: kpi }),
         delete: (id: string) => request<void>("DELETE", `/kpis/${id}`),
+        reorder: (sectorId: string, orderedIds: string[]) =>
+            request<void>("PUT", `/sectors/${sectorId}/kpis/reorder`, { body: { orderedIds } }),
     },
 
     // ===== KPI ENTRIES =====

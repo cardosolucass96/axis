@@ -8,13 +8,55 @@ import { MonthlyTargetConfig } from '../components/MonthlyTargetConfig';
 import { LoadingSpinner, EmptyState } from '../components/ui';
 import {
   ChevronDown, ChevronRight, Save, AlertTriangle, Check, Loader2,
-  Download, Settings, X, Calendar, CalendarDays, Send
+  Download, Settings, X, Calendar, CalendarDays, Send, GripVertical
 } from 'lucide-react';
 import { api } from '../src/services/api';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { getWeeksForMonth, getCurrentMonth, getCurrentWeek, getDaysInWeek, getDaysArrayForWeek, extractDayRange } from '../utils/weekCalculator';
 import { useAuth } from '../contexts/AuthContext';
 
 type ViewMode = 'week' | 'day';
+
+function SortableTrWrapper({ id, canDrag, className, children }: {
+  id: string;
+  canDrag: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canDrag });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  return (
+    <tr ref={setNodeRef} style={style} className={className}>
+      <td className="px-2 py-3 w-8 text-center">
+        {canDrag && (
+          <button
+            {...attributes}
+            {...listeners}
+            className="text-zinc-300 dark:text-zinc-600 hover:text-zinc-500 dark:hover:text-zinc-400 cursor-grab active:cursor-grabbing touch-none"
+            title="Arrastar para reordenar"
+          >
+            <GripVertical className="w-4 h-4" />
+          </button>
+        )}
+      </td>
+      {children}
+    </tr>
+  );
+}
 
 export const DataEntryPage: React.FC = () => {
   const { user } = useAuth();
@@ -385,6 +427,24 @@ export const DataEntryPage: React.FC = () => {
     return names[date.getDay()];
   };
 
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleKpiDragEnd = (sectorId: string, event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setExpandedKpi(null);
+    setSectors(prev => prev.map(sector => {
+      if (sector.id !== sectorId) return sector;
+      const oldIndex = sector.kpis.findIndex(k => k.id === active.id);
+      const newIndex = sector.kpis.findIndex(k => k.id === over.id);
+      const reordered = arrayMove(sector.kpis, oldIndex, newIndex);
+      api.kpis.reorder(sectorId, reordered.map(k => k.id))
+        .then(() => dataService.invalidateCache())
+        .catch(console.error);
+      return { ...sector, kpis: reordered };
+    }));
+  };
+
   const handleSendReport = async () => {
     if (isSendingReport) return;
     setIsSendingReport(true);
@@ -584,6 +644,7 @@ export const DataEntryPage: React.FC = () => {
         <table className="w-full table-fixed">
           <thead>
             <tr className="bg-zinc-100 dark:bg-zinc-950 text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-700">
+              <th className="w-8"></th>
               <th className="text-left px-4 py-3">KPI</th>
               <th className="text-right px-4 py-3 w-32">Meta{viewMode === 'day' ? ' (dia)' : ''}</th>
               <th className="text-center px-4 py-3 w-40">Realizado</th>
@@ -594,10 +655,12 @@ export const DataEntryPage: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
             {activeSectors.map(sector => (
-              <React.Fragment key={sector.id}>
+              <DndContext key={sector.id} sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e) => handleKpiDragEnd(sector.id, e)}>
+                <SortableContext items={sector.kpis.map(k => k.id)} strategy={verticalListSortingStrategy}>
+                  <React.Fragment>
                 {selectedSector === 'Todos' && (
                   <tr className="bg-amber-50 dark:bg-amber-900/20">
-                    <td colSpan={6} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
+                    <td colSpan={7} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
                       {sector.name}
                     </td>
                   </tr>
@@ -622,12 +685,18 @@ export const DataEntryPage: React.FC = () => {
               const weeklyRealized = weekEntry?.realized;
               const weeklyHasRealized = weeklyRealized !== null && weeklyRealized !== undefined;
 
+              const canDrag = selectedSector !== 'Todos';
+
               return (
                 <React.Fragment key={kpi.id}>
                   {/* Linha principal */}
-                  <tr className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
-                    !isDayMode && requires ? 'bg-red-50/50 dark:bg-red-900/10' : ''
-                  }`}>
+                  <SortableTrWrapper
+                    id={kpi.id}
+                    canDrag={canDrag}
+                    className={`hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
+                      !isDayMode && requires ? 'bg-red-50/50 dark:bg-red-900/10' : ''
+                    }`}
+                  >
                     {/* Nome do KPI */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -772,12 +841,12 @@ export const DataEntryPage: React.FC = () => {
                         )
                       )}
                     </td>
-                  </tr>
+                  </SortableTrWrapper>
 
                   {/* Linha de análise expandida (apenas modo semana) */}
                   {!isDayMode && requires && isExpanded && (
                     <tr>
-                      <td colSpan={6} className="bg-zinc-100 dark:bg-zinc-950 px-4 py-4 border-t border-zinc-200 dark:border-zinc-700">
+                      <td colSpan={7} className="bg-zinc-100 dark:bg-zinc-950 px-4 py-4 border-t border-zinc-200 dark:border-zinc-700">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                           {/* 5 Porquês */}
                           <div>
@@ -817,7 +886,9 @@ export const DataEntryPage: React.FC = () => {
                 </React.Fragment>
               );
             })}
-              </React.Fragment>
+                  </React.Fragment>
+                </SortableContext>
+              </DndContext>
             ))}
           </tbody>
         </table>

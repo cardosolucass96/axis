@@ -49,6 +49,10 @@ export class KPIService {
         return await this.kpiRepository.update(id, data);
     }
 
+    async reorderKPIs(sectorId: string, orderedIds: string[]): Promise<void> {
+        await this.kpiRepository.reorderKPIs(sectorId, orderedIds);
+    }
+
     async deleteKPI(id: string): Promise<boolean> {
         const kpi = await this.kpiRepository.findById(id);
         if (!kpi) {
