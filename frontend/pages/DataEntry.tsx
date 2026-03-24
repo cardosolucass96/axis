@@ -144,7 +144,9 @@ export const DataEntryPage: React.FC = () => {
         if (!selectedSector) {
           if (user?.role === 'admin') {
             setSelectedSector('Todos');
-          } else if (filteredSectors.length >= 1) {
+          } else if (filteredSectors.length > 1) {
+            setSelectedSector('Todos');
+          } else if (filteredSectors.length === 1) {
             setSelectedSector(filteredSectors[0].id);
           }
         }
@@ -642,7 +644,7 @@ export const DataEntryPage: React.FC = () => {
         <table className="w-full table-fixed">
           <thead>
             <tr className="bg-zinc-100 dark:bg-zinc-950 text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-700">
-              {user?.role === 'leader' && selectedSector !== 'Todos' && <th className="w-8"></th>}
+              {user?.role === 'leader' && <th className="w-8"></th>}
               <th className="text-left px-4 py-3">KPI</th>
               <th className="text-right px-4 py-3 w-32">Meta{viewMode === 'day' ? ' (dia)' : ''}</th>
               <th className="text-center px-4 py-3 w-40">Realizado</th>
@@ -658,7 +660,7 @@ export const DataEntryPage: React.FC = () => {
                   <React.Fragment>
                 {selectedSector === 'Todos' && (
                   <tr className="bg-amber-50 dark:bg-amber-900/20">
-                    <td colSpan={6} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
+                    <td colSpan={user?.role === 'leader' ? 7 : 6} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
                       {sector.name}
                     </td>
                   </tr>
@@ -683,7 +685,7 @@ export const DataEntryPage: React.FC = () => {
               const weeklyRealized = weekEntry?.realized;
               const weeklyHasRealized = weeklyRealized !== null && weeklyRealized !== undefined;
 
-              const canDrag = user?.role === 'leader' && selectedSector !== 'Todos';
+              const canDrag = user?.role === 'leader';
 
               return (
                 <React.Fragment key={kpi.id}>
