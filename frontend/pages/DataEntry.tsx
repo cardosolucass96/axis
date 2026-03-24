@@ -144,9 +144,7 @@ export const DataEntryPage: React.FC = () => {
         if (!selectedSector) {
           if (user?.role === 'admin') {
             setSelectedSector('Todos');
-          } else if (filteredSectors.length > 1) {
-            setSelectedSector('Todos');
-          } else if (filteredSectors.length === 1) {
+          } else if (filteredSectors.length >= 1) {
             setSelectedSector(filteredSectors[0].id);
           }
         }
