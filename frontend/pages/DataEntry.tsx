@@ -41,8 +41,8 @@ function SortableTrWrapper({ id, canDrag, className, children }: {
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
   return (
     <tr ref={setNodeRef} style={style} className={className}>
-      <td className="px-2 py-3 w-8 text-center">
-        {canDrag && (
+      {canDrag && (
+        <td className="px-2 py-3 w-8 text-center">
           <button
             {...attributes}
             {...listeners}
@@ -51,8 +51,8 @@ function SortableTrWrapper({ id, canDrag, className, children }: {
           >
             <GripVertical className="w-4 h-4" />
           </button>
-        )}
-      </td>
+        </td>
+      )}
       {children}
     </tr>
   );
@@ -644,7 +644,7 @@ export const DataEntryPage: React.FC = () => {
         <table className="w-full table-fixed">
           <thead>
             <tr className="bg-zinc-100 dark:bg-zinc-950 text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-700">
-              <th className="w-8"></th>
+              {user?.role === 'leader' && selectedSector !== 'Todos' && <th className="w-8"></th>}
               <th className="text-left px-4 py-3">KPI</th>
               <th className="text-right px-4 py-3 w-32">Meta{viewMode === 'day' ? ' (dia)' : ''}</th>
               <th className="text-center px-4 py-3 w-40">Realizado</th>
@@ -660,7 +660,7 @@ export const DataEntryPage: React.FC = () => {
                   <React.Fragment>
                 {selectedSector === 'Todos' && (
                   <tr className="bg-amber-50 dark:bg-amber-900/20">
-                    <td colSpan={7} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
+                    <td colSpan={6} className="px-4 py-2 font-semibold text-amber-700 dark:text-amber-300 text-sm">
                       {sector.name}
                     </td>
                   </tr>
@@ -685,7 +685,7 @@ export const DataEntryPage: React.FC = () => {
               const weeklyRealized = weekEntry?.realized;
               const weeklyHasRealized = weeklyRealized !== null && weeklyRealized !== undefined;
 
-              const canDrag = selectedSector !== 'Todos';
+              const canDrag = user?.role === 'leader' && selectedSector !== 'Todos';
 
               return (
                 <React.Fragment key={kpi.id}>
