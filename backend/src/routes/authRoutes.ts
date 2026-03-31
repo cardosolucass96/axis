@@ -18,7 +18,6 @@ import {
     getSessionExtras,
     setSessionImpersonation
 } from "../auth/lucia";
-import { requireAdmin, requireAuth } from "../middleware/auth";
 import { generateIdFromEntropySize } from "lucia";
 import { AppDataSource } from "../data-source";
 import { User as UserEntity } from "../entities/User";
@@ -650,10 +649,22 @@ export async function authRoutes(app: FastifyInstance) {
     // ============================================
     // IMPERSONAR USUÁRIO (admin only)
     // ============================================
-    app.post("/auth/impersonate/:userId", { preHandler: requireAdmin }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
+    app.post("/auth/impersonate/:userId", async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
+        const sessionId = request.cookies.axis_session;
+        if (!sessionId) {
+            return reply.status(401).send({ error: "Autenticação necessária" });
+        }
+
+        const { session, user: adminUser } = await lucia.validateSession(sessionId);
+        if (!session || !adminUser) {
+            return reply.status(401).send({ error: "Sessão inválida" });
+        }
+
+        if (adminUser.role !== "admin") {
+            return reply.status(403).send({ error: "Acesso negado. Apenas administradores." });
+        }
+
         const { userId } = request.params;
-        const adminUser = request.user!;
-        const adminSessionId = request.sessionId!;
 
         if (userId === adminUser.id) {
             return reply.status(400).send({ error: "Não pode impersonar a si mesmo" });
@@ -668,12 +679,12 @@ export async function authRoutes(app: FastifyInstance) {
             return reply.status(403).send({ error: "Não é possível impersonar outro administrador" });
         }
 
-        const session = await lucia.createSession(userId, {});
-        setSessionImpersonation(session.id, adminUser.id, adminSessionId);
+        const impersonationSession = await lucia.createSession(userId, {});
+        setSessionImpersonation(impersonationSession.id, adminUser.id, session.id);
 
         console.log(`[IMPERSONATION] Admin ${adminUser.email} passou a visualizar como ${targetUser.email}`);
 
-        const sessionCookie = lucia.createSessionCookie(session.id);
+        const sessionCookie = lucia.createSessionCookie(impersonationSession.id);
         reply.setCookie(sessionCookie.name, sessionCookie.value, {
             path: sessionCookie.attributes.path || "/",
             httpOnly: true,
@@ -688,15 +699,23 @@ export async function authRoutes(app: FastifyInstance) {
     // ============================================
     // PARAR IMPERSONAÇÃO
     // ============================================
-    app.post("/auth/stop-impersonate", { preHandler: requireAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
-        const currentSessionId = request.sessionId!;
-        const extras = getSessionExtras(currentSessionId);
+    app.post("/auth/stop-impersonate", async (request: FastifyRequest, reply: FastifyReply) => {
+        const sessionId = request.cookies.axis_session;
+        if (!sessionId) {
+            return reply.status(401).send({ error: "Autenticação necessária" });
+        }
 
+        const { session } = await lucia.validateSession(sessionId);
+        if (!session) {
+            return reply.status(401).send({ error: "Sessão inválida" });
+        }
+
+        const extras = getSessionExtras(session.id);
         if (!extras?.impersonated_by || !extras?.original_session_id) {
             return reply.status(400).send({ error: "Sessão atual não é de impersonação" });
         }
 
-        await lucia.invalidateSession(currentSessionId);
+        await lucia.invalidateSession(session.id);
 
         const { session: originalSession } = await lucia.validateSession(extras.original_session_id);
 

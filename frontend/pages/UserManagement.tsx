@@ -68,8 +68,13 @@ export const UserManagementPage: React.FC = () => {
   };
 
   const handleImpersonate = async (user: User) => {
-    await impersonateUser(user.id);
-    navigate('/dashboard');
+    try {
+      await impersonateUser(user.id);
+      navigate('/dashboard');
+    } catch (error) {
+      console.error('Falha ao impersonar:', error);
+      alert((error as Error).message);
+    }
   };
 
   const openNewUserModal = () => {

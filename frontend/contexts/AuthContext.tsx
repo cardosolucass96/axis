@@ -181,10 +181,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const impersonateUser = async (userId: string) => {
-        await fetch(`${API_URL}/auth/impersonate/${userId}`, {
+        const response = await fetch(`${API_URL}/auth/impersonate/${userId}`, {
             method: "POST",
             credentials: "include"
         });
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || "Falha ao acessar conta do usuário");
+        }
         await refreshUser();
     };
 
