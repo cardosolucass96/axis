@@ -727,6 +727,7 @@ export const Dashboard: React.FC = () => {
             unit: kpi.unit,
             format: kpi.format || '',
             isInverse: kpi.isInverse || false,
+            order: kpi.order ?? 0,
             realized: adjustedRealized,
             target,
             gap,
@@ -749,10 +750,7 @@ export const Dashboard: React.FC = () => {
         return {
           sectorId: sector.id,
           sectorName: sector.name,
-          kpis: kpiList.sort((a, b) => {
-            const order = { 'critical': 0, 'warning': 1, 'on-track': 2, 'no-data': 3 };
-            return order[a.status] - order[b.status];
-          }),
+          kpis: kpiList.sort((a, b) => a.order - b.order),
           sectorPercentage,
           kpisOnTrack,
           kpisTotal
