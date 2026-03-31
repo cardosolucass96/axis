@@ -226,6 +226,12 @@ export function updateUserGoogleId(userId: string, googleId: string) {
     stmt.run(googleId, userId);
 }
 
+export function updateUserSectorIds(userId: string, sectorIds: string[]) {
+    const sectorIdJson = sectorIds.length > 0 ? JSON.stringify(sectorIds) : null;
+    const stmt = authDb.prepare("UPDATE user SET sector_id = ?, updated_at = unixepoch() WHERE id = ?");
+    stmt.run(sectorIdJson, userId);
+}
+
 export function getSessionExtras(sessionId: string): { impersonated_by: string | null; original_session_id: string | null } | null {
     const stmt = authDb.prepare("SELECT impersonated_by, original_session_id FROM session WHERE id = ?");
     return stmt.get(sessionId) as { impersonated_by: string | null; original_session_id: string | null } | null;

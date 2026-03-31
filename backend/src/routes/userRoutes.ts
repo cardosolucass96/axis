@@ -1,5 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { UserService } from "../services/UserService";
+import { updateUserSectorIds } from "../auth/lucia";
 
 const userService = new UserService();
 
@@ -75,12 +76,17 @@ export async function userRoutes(app: FastifyInstance) {
             const body = request.body as any;
             
             const user = await userService.updateUser(id, body);
-            
+
             if (!user) {
                 return reply.code(404).send({
                     status: "error",
                     message: "Usuário não encontrado",
                 });
+            }
+
+            // Sincroniza sector_id na tabela de autenticação (Lucia) se vier no body
+            if (body.sectorIds !== undefined) {
+                updateUserSectorIds(id, body.sectorIds || []);
             }
 
             return reply.send({
@@ -137,6 +143,9 @@ export async function userRoutes(app: FastifyInstance) {
                     message: "Usuário não encontrado",
                 });
             }
+
+            // Sincroniza sector_id na tabela de autenticação (Lucia)
+            updateUserSectorIds(userId, sectorIds);
 
             return reply.send({
                 status: "success",
