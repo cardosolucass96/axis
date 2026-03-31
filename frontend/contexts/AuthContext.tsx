@@ -24,6 +24,7 @@ interface User {
     role: "admin" | "leader";
     avatarUrl?: string;
     sectorIds?: string[]; // Setores vinculados ao líder
+    isImpersonating?: boolean;
 }
 
 interface AuthResult {
@@ -37,11 +38,14 @@ interface AuthContextType {
     user: User | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    isImpersonating: boolean;
     loginWithGoogle: () => void;
     loginWithEmail: (email: string, password: string) => Promise<AuthResult>;
     register: (name: string, email: string, password: string, confirmPassword: string) => Promise<AuthResult>;
     logout: () => Promise<void>;
     refreshUser: () => Promise<void>;
+    impersonateUser: (userId: string) => Promise<void>;
+    stopImpersonation: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -176,17 +180,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    const impersonateUser = async (userId: string) => {
+        await fetch(`${API_URL}/auth/impersonate/${userId}`, {
+            method: "POST",
+            credentials: "include"
+        });
+        await refreshUser();
+    };
+
+    const stopImpersonation = async () => {
+        const response = await fetch(`${API_URL}/auth/stop-impersonate`, {
+            method: "POST",
+            credentials: "include"
+        });
+        const data = await response.json();
+        if (data.redirectToLogin) {
+            setUser(null);
+        } else {
+            await refreshUser();
+        }
+    };
+
     return (
         <AuthContext.Provider
             value={{
                 user,
                 isLoading,
                 isAuthenticated: !!user,
+                isImpersonating: !!(user?.isImpersonating),
                 loginWithGoogle,
                 loginWithEmail,
                 register,
                 logout,
-                refreshUser
+                refreshUser,
+                impersonateUser,
+                stopImpersonation
             }}
         >
             {children}

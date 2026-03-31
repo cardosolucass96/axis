@@ -65,6 +65,19 @@ try {
     // Coluna já existe, ignora
 }
 
+// Adiciona colunas de impersonação na sessão
+try {
+    authDb.exec(`ALTER TABLE session ADD COLUMN impersonated_by TEXT`);
+} catch (e) {
+    // Coluna já existe, ignora
+}
+
+try {
+    authDb.exec(`ALTER TABLE session ADD COLUMN original_session_id TEXT`);
+} catch (e) {
+    // Coluna já existe, ignora
+}
+
 // Configura adapter do Lucia
 const adapter = new BetterSqlite3Adapter(authDb, {
     user: "user",
@@ -211,6 +224,16 @@ export function getUserById(id: string) {
 export function updateUserGoogleId(userId: string, googleId: string) {
     const stmt = authDb.prepare("UPDATE user SET google_id = ?, email_verified = 1, updated_at = unixepoch() WHERE id = ?");
     stmt.run(googleId, userId);
+}
+
+export function getSessionExtras(sessionId: string): { impersonated_by: string | null; original_session_id: string | null } | null {
+    const stmt = authDb.prepare("SELECT impersonated_by, original_session_id FROM session WHERE id = ?");
+    return stmt.get(sessionId) as { impersonated_by: string | null; original_session_id: string | null } | null;
+}
+
+export function setSessionImpersonation(sessionId: string, impersonatedBy: string, originalSessionId: string) {
+    const stmt = authDb.prepare("UPDATE session SET impersonated_by = ?, original_session_id = ? WHERE id = ?");
+    stmt.run(impersonatedBy, originalSessionId, sessionId);
 }
 
 export function updateUserPassword(userId: string, passwordHash: string) {

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, Sector } from '../types';
 import { dataService } from '../src/services/dataService';
 import { Button } from '../components/Button';
 import { PageHeader, LoadingSpinner, Modal, Input, Select, Badge, IconButton } from '../components/ui';
 import { ds } from '../styles/design-tokens';
-import { Trash2, Edit, UserPlus, Shield, User as UserIcon } from 'lucide-react';
+import { Trash2, Edit, UserPlus, Shield, User as UserIcon, Eye } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export const UserManagementPage: React.FC = () => {
+  const { user: currentAuthUser, impersonateUser } = useAuth();
+  const navigate = useNavigate();
   const [users, setUsers] = useState<User[]>([]);
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +65,11 @@ export const UserManagementPage: React.FC = () => {
       await dataService.deleteUser(id);
       await refreshUsers();
     }
+  };
+
+  const handleImpersonate = async (user: User) => {
+    await impersonateUser(user.id);
+    navigate('/dashboard');
   };
 
   const openNewUserModal = () => {
@@ -123,6 +132,15 @@ export const UserManagementPage: React.FC = () => {
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">
+                    {user.role !== 'admin' && user.id !== currentAuthUser?.id && (
+                      <button
+                        onClick={() => handleImpersonate(user)}
+                        title="Acessar como este usuário"
+                        className="p-2 text-zinc-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    )}
                     <button onClick={() => handleEdit(user)} className="p-2 text-zinc-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg">
                       <Edit className="w-4 h-4" />
                     </button>

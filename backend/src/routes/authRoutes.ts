@@ -1,11 +1,12 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { generateCodeVerifier, generateState } from "arctic";
 import { google, getGoogleUser } from "../auth/google";
-import { 
-    lucia, 
-    createUser, 
-    getUserByGoogleId, 
-    getUserByEmail, 
+import {
+    lucia,
+    createUser,
+    getUserByGoogleId,
+    getUserByEmail,
+    getUserById,
     updateUserGoogleId,
     hashPassword,
     verifyPassword,
@@ -13,8 +14,11 @@ import {
     isAllowedDomain,
     validatePassword,
     userHasPassword,
-    userHasGoogleAuth
+    userHasGoogleAuth,
+    getSessionExtras,
+    setSessionImpersonation
 } from "../auth/lucia";
+import { requireAdmin, requireAuth } from "../middleware/auth";
 import { generateIdFromEntropySize } from "lucia";
 import { AppDataSource } from "../data-source";
 import { User as UserEntity } from "../entities/User";
@@ -626,18 +630,97 @@ export async function authRoutes(app: FastifyInstance) {
                 });
             }
 
+            const sessionExtras = getSessionExtras(session.id);
+
             return {
                 id: user.id,
                 email: user.email,
                 name: user.name,
                 role: user.role,
                 avatarUrl: user.avatarUrl,
-                sectorIds: user.sectorIds || []
+                sectorIds: user.sectorIds || [],
+                isImpersonating: !!(sessionExtras?.impersonated_by)
             };
         } catch (error) {
             console.error("Erro ao validar sessão:", error);
             return reply.status(401).send({ error: "Sessão inválida" });
         }
+    });
+
+    // ============================================
+    // IMPERSONAR USUÁRIO (admin only)
+    // ============================================
+    app.post("/auth/impersonate/:userId", { preHandler: requireAdmin }, async (request: FastifyRequest<{ Params: { userId: string } }>, reply: FastifyReply) => {
+        const { userId } = request.params;
+        const adminUser = request.user!;
+        const adminSessionId = request.sessionId!;
+
+        if (userId === adminUser.id) {
+            return reply.status(400).send({ error: "Não pode impersonar a si mesmo" });
+        }
+
+        const targetUser = getUserById(userId);
+        if (!targetUser) {
+            return reply.status(404).send({ error: "Usuário não encontrado" });
+        }
+
+        if (targetUser.role === "admin") {
+            return reply.status(403).send({ error: "Não é possível impersonar outro administrador" });
+        }
+
+        const session = await lucia.createSession(userId, {});
+        setSessionImpersonation(session.id, adminUser.id, adminSessionId);
+
+        console.log(`[IMPERSONATION] Admin ${adminUser.email} passou a visualizar como ${targetUser.email}`);
+
+        const sessionCookie = lucia.createSessionCookie(session.id);
+        reply.setCookie(sessionCookie.name, sessionCookie.value, {
+            path: sessionCookie.attributes.path || "/",
+            httpOnly: true,
+            secure: isSecure,
+            sameSite: "lax",
+            maxAge: sessionCookie.attributes.maxAge
+        });
+
+        return { success: true };
+    });
+
+    // ============================================
+    // PARAR IMPERSONAÇÃO
+    // ============================================
+    app.post("/auth/stop-impersonate", { preHandler: requireAuth }, async (request: FastifyRequest, reply: FastifyReply) => {
+        const currentSessionId = request.sessionId!;
+        const extras = getSessionExtras(currentSessionId);
+
+        if (!extras?.impersonated_by || !extras?.original_session_id) {
+            return reply.status(400).send({ error: "Sessão atual não é de impersonação" });
+        }
+
+        await lucia.invalidateSession(currentSessionId);
+
+        const { session: originalSession } = await lucia.validateSession(extras.original_session_id);
+
+        if (!originalSession) {
+            const blankCookie = lucia.createBlankSessionCookie();
+            reply.setCookie(blankCookie.name, blankCookie.value, {
+                path: blankCookie.attributes.path || "/",
+                httpOnly: true,
+                secure: blankCookie.attributes.secure,
+                sameSite: blankCookie.attributes.sameSite as "lax" | "strict" | "none"
+            });
+            return { success: true, redirectToLogin: true };
+        }
+
+        const sessionCookie = lucia.createSessionCookie(extras.original_session_id);
+        reply.setCookie(sessionCookie.name, sessionCookie.value, {
+            path: sessionCookie.attributes.path || "/",
+            httpOnly: true,
+            secure: isSecure,
+            sameSite: "lax",
+            maxAge: sessionCookie.attributes.maxAge
+        });
+
+        return { success: true };
     });
 
     // Logout

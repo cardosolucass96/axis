@@ -14,6 +14,7 @@ import { LoadingProvider } from './contexts/LoadingContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LoginPage } from './pages/Login';
+import { ImpersonationBanner } from './components/ImpersonationBanner';
 
 // Google Logo Component for brand consistency
 const GoogleLogo = () => (
@@ -28,7 +29,7 @@ const GoogleLogo = () => (
 );
 
 const AppContent: React.FC = () => {
-  const { user: authUser, isLoading: isAuthLoading, isAuthenticated, login, logout } = useAuth();
+  const { user: authUser, isLoading: isAuthLoading, isAuthenticated, login, logout, isImpersonating } = useAuth();
   
   // Converte o usuário do auth para o formato esperado
   const currentUser: User | null = authUser ? {
@@ -67,6 +68,8 @@ const AppContent: React.FC = () => {
   }
 
   return (
+    <>
+    <ImpersonationBanner />
     <Layout
       currentUser={currentUser}
       onLogout={logout}
@@ -97,6 +100,7 @@ const AppContent: React.FC = () => {
         />
       </Routes>
     </Layout>
+    </>
   );
 };
 
