@@ -140,19 +140,24 @@ export const Dashboard: React.FC = () => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [entriesData, sectorsData, mtData] = await Promise.all([
-          dataService.getEntries(undefined, undefined, 'null'), // só entradas semanais (day=null)
+        const [allEntriesData, sectorsData, mtData] = await Promise.all([
+          dataService.getEntries(), // TODAS as entries (weekly + daily) numa única chamada
           dataService.getSectors(),
           dataService.getMonthlyTargets()
         ]);
-        
+
         // Se for líder, filtrar entries pelos seus setores
         const userSectorIds = user?.sectorIds || [];
         const filteredByRole = user?.role === 'leader' && userSectorIds.length > 0
-          ? entriesData.filter(e => userSectorIds.includes(e.sectorId))
-          : entriesData;
-        
-        setEntries(filteredByRole);
+          ? allEntriesData.filter(e => userSectorIds.includes(e.sectorId))
+          : allEntriesData;
+
+        // Separar weekly (para o dashboard geral) e daily (para mini-gráficos acumulados)
+        const weeklyEntries = filteredByRole.filter(e => e.day === null || e.day === undefined);
+        const dailyEntries = filteredByRole.filter(e => e.day !== null && e.day !== undefined);
+
+        setEntries(weeklyEntries);
+        setAllDailyEntries(dailyEntries);
         setSectors(sectorsData);
         setMonthlyTargets(mtData || []);
       } catch (error) {
@@ -163,23 +168,6 @@ export const Dashboard: React.FC = () => {
     };
 
     loadData();
-  }, [user]);
-
-  // Carregar todas as entradas diárias (para mini-gráficos acumulados)
-  useEffect(() => {
-    const loadDailyEntries = async () => {
-      try {
-        const all = await dataService.getEntries();
-        const userSectorIds = user?.sectorIds || [];
-        const filteredByRole = user?.role === 'leader' && userSectorIds.length > 0
-          ? all.filter((e: KpiEntry) => userSectorIds.includes(e.sectorId))
-          : all;
-        setAllDailyEntries(filteredByRole.filter((e: KpiEntry) => e.day !== null && e.day !== undefined));
-      } catch (err) {
-        console.error('Erro ao carregar daily entries:', err);
-      }
-    };
-    loadDailyEntries();
   }, [user]);
 
   // Carregar entradas diárias quando modo dia está ativo
