@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { dataService } from '../src/services/dataService';
 import {
-  BarChart, Bar, PieChart, Pie, AreaChart, Area,
+  BarChart, Bar, PieChart, Pie, AreaChart, Area, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import { 
@@ -67,6 +67,7 @@ export const Dashboard: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDayLoading, setIsDayLoading] = useState(false);
   const [initialFiltersSet, setInitialFiltersSet] = useState(false);
+  const [selectedDayKpi, setSelectedDayKpi] = useState<string | null>(null);
 
   // Meses disponíveis para WeekRangePicker (6 meses a partir de agora)
   const availableMonths = useMemo(() => getNextMonths(6), []);
@@ -502,6 +503,70 @@ export const Dashboard: React.FC = () => {
   }, [viewMode, startWeek, allWeekEntries, filterSector]);
 
   const hasEstimatedDayData = dayTrendData.some(d => d.isEstimated);
+
+  // KPIs disponíveis para seleção no modo dia
+  const availableKpisForDay = useMemo(() => {
+    if (viewMode !== 'day' || !startWeek) return [];
+    const kpiMap = new Map<string, { id: string; name: string; sectorName: string }>();
+
+    allWeekEntries.forEach(e => {
+      if (filterSector === 'Todos' || e.sectorId === filterSector) {
+        const sector = sectors.find(s => s.id === e.sectorId);
+        const kpiKey = `${e.kpiId}`;
+        if (!kpiMap.has(kpiKey) && e.kpi && sector) {
+          kpiMap.set(kpiKey, { id: e.kpiId, name: e.kpi.name, sectorName: sector.name });
+        }
+      }
+    });
+    return Array.from(kpiMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [viewMode, startWeek, allWeekEntries, filterSector, sectors]);
+
+  // Auto-seleção do primeiro KPI disponível
+  useEffect(() => {
+    if (viewMode === 'day' && availableKpisForDay.length > 0 && !selectedDayKpi) {
+      setSelectedDayKpi(availableKpisForDay[0].id);
+    }
+  }, [viewMode, availableKpisForDay, selectedDayKpi]);
+
+  // Dados diários por KPI selecionado (realizado vs meta)
+  const dayTrendDataByKpi = useMemo(() => {
+    if (viewMode !== 'day' || !startWeek || !selectedDayKpi) return [];
+    const days = getDaysArrayForWeek(startWeek);
+
+    // Buscar a entrada semanal para pegar a meta semanal
+    const weeklyEntry = allWeekEntries.find(e =>
+      (e.day === null || e.day === undefined) &&
+      e.kpiId === selectedDayKpi &&
+      (filterSector === 'Todos' || e.sectorId === filterSector)
+    );
+
+    const weeklyTarget = weeklyEntry?.target || 0;
+    const daysInWeek = days.length;
+    const paceDiario = weeklyTarget / daysInWeek;
+
+    return days.map((day, index) => {
+      const dayEntries = allWeekEntries.filter(e =>
+        e.day === day &&
+        e.kpiId === selectedDayKpi &&
+        (filterSector === 'Todos' || e.sectorId === filterSector)
+      );
+
+      const realized = dayEntries.length > 0 && dayEntries[0].realized !== null
+        ? Number(dayEntries[0].realized)
+        : null;
+
+      // Meta progressiva: PACE * dias decorridos até agora
+      const metaProgressiva = paceDiario * (index + 1);
+
+      return {
+        label: String(day),
+        realizado: realized,
+        meta: paceDiario,
+        metaProgressiva: metaProgressiva,
+        isEstimated: realized === null
+      };
+    });
+  }, [viewMode, startWeek, selectedDayKpi, allWeekEntries, filterSector]);
 
   // Dados de tendência por semana dentro do mês selecionado (modo mês)
   // Agrupa pelos valores reais de week nas entries ao invés de calcular semanas teóricas
@@ -1143,42 +1208,64 @@ export const Dashboard: React.FC = () => {
                   <div className="h-full flex items-center justify-center text-sm text-zinc-400">
                     Carregando dados diários...
                   </div>
-                ) : dayTrendData.length === 0 ? (
+                ) : availableKpisForDay.length === 0 ? (
                   <div className="h-full flex items-center justify-center text-sm text-zinc-400">
                     Sem dados para esta semana
                   </div>
                 ) : (
                   <>
+                    {/* Dropdown para selecionar KPI */}
+                    <div className="mb-4 flex items-center gap-2">
+                      <label className="text-sm text-zinc-500">KPI:</label>
+                      <select
+                        value={selectedDayKpi || ''}
+                        onChange={(e) => setSelectedDayKpi(e.target.value)}
+                        className="px-3 py-1 bg-zinc-800 dark:bg-zinc-800 text-white text-sm rounded border border-zinc-700 focus:outline-none focus:border-blue-500"
+                      >
+                        {availableKpisForDay.map(kpi => (
+                          <option key={kpi.id} value={kpi.id}>
+                            {kpi.name} ({kpi.sectorName})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Gráfico de Linhas: Realizado vs Meta */}
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dayTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <LineChart data={dayTrendDataByKpi} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
                         <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} unit="%" domain={[0, 150]} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
                         <Tooltip
                           contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
                           itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
-                          formatter={(value: number, _name: string, props: any) => [
-                            `${value}%${props.payload?.isEstimated ? ' (média estimada)' : ''}`,
-                            'Atingimento'
-                          ]}
+                          formatter={(value: number | null) => value !== null ? value.toFixed(2) : 'Sem dados'}
                         />
-                        <ReferenceLine y={100} stroke="#52525b" strokeDasharray="3 3" />
-                        <Bar dataKey="performance" radius={[4, 4, 0, 0]} barSize={32}>
-                          {dayTrendData.map((entry, index) => (
-                            <Cell
-                              key={`cell-${index}`}
-                              fill={entry.isEstimated ? '#a16207' : entry.performance >= 100 ? '#10b981' : entry.performance >= 90 ? '#f59e0b' : '#ef4444'}
-                              opacity={entry.isEstimated ? 0.6 : 1}
-                            />
-                          ))}
-                        </Bar>
-                      </BarChart>
+                        <ReferenceLine y={0} stroke="#52525b" />
+                        {/* Linha de Meta Diária (PACE) */}
+                        <Line
+                          type="monotone"
+                          dataKey="meta"
+                          stroke="#94a3b8"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          name="PACE Diário"
+                          isAnimationActive={false}
+                        />
+                        {/* Linha de Realizado */}
+                        <Line
+                          type="monotone"
+                          dataKey="realizado"
+                          stroke="#10b981"
+                          strokeWidth={3}
+                          dot={{ fill: '#10b981', r: 4 }}
+                          activeDot={{ r: 6 }}
+                          name="Realizado"
+                          isAnimationActive={false}
+                        />
+                      </LineChart>
                     </ResponsiveContainer>
-                    {hasEstimatedDayData && (
-                      <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-2">
-                        * Dias sem entrada diária cadastrada — valor estimado pela média semanal
-                      </p>
-                    )}
                   </>
                 )}
               </div>
