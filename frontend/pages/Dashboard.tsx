@@ -195,9 +195,6 @@ export const Dashboard: React.FC = () => {
   // Handler para troca de modo de visualização
   const handleViewModeChange = (mode: 'month' | 'week' | 'day') => {
     setViewMode(mode);
-    if (mode === 'day' && startWeek) {
-      setEndWeek(startWeek); // colapsa range para 1 semana
-    }
     // Ao entrar no modo mês, garantir que selectedMonth seja um mês com dados reais
     if (mode === 'month' && entryMonths.length > 0 && !entryMonths.includes(selectedMonth)) {
       setSelectedMonth(entryMonths[entryMonths.length - 1]);
@@ -528,45 +525,70 @@ export const Dashboard: React.FC = () => {
     }
   }, [viewMode, availableKpisForDay, selectedDayKpi]);
 
-  // Dados diários por KPI selecionado (realizado vs meta)
+  // Dados diários por KPI selecionado (realizado vs meta) - múltiplas semanas
   const dayTrendDataByKpi = useMemo(() => {
-    if (viewMode !== 'day' || !startWeek || !selectedDayKpi) return [];
-    const days = getDaysArrayForWeek(startWeek);
+    if (viewMode !== 'day' || !startWeek || !endWeek || !selectedDayKpi) return [];
 
-    // Buscar a entrada semanal para pegar a meta semanal
-    const weeklyEntry = allWeekEntries.find(e =>
-      (e.day === null || e.day === undefined) &&
-      e.kpiId === selectedDayKpi &&
-      (filterSector === 'Todos' || e.sectorId === filterSector)
-    );
+    const allData: Array<{
+      label: string;
+      realizado: number | null;
+      meta: number;
+      isEstimated: boolean;
+      week: string;
+    }> = [];
 
-    const weeklyTarget = weeklyEntry?.target || 0;
-    const daysInWeek = days.length;
-    const paceDiario = weeklyTarget / daysInWeek;
+    // Iterar sobre as semanas no range
+    let currentWeekIdx = getWeekGlobalIndex(startWeek);
+    const endWeekIdx = getWeekGlobalIndex(endWeek);
 
-    return days.map((day, index) => {
-      const dayEntries = allWeekEntries.filter(e =>
-        e.day === day &&
-        e.kpiId === selectedDayKpi &&
-        (filterSector === 'Todos' || e.sectorId === filterSector)
-      );
+    while (currentWeekIdx <= endWeekIdx) {
+      // Encontrar a semana label com este índice
+      const currentWeekLabel = allWeekEntries
+        .map(e => e.week)
+        .find(w => getWeekGlobalIndex(w) === currentWeekIdx);
 
-      const realized = dayEntries.length > 0 && dayEntries[0].realized !== null
-        ? Number(dayEntries[0].realized)
-        : null;
+      if (currentWeekLabel) {
+        const days = getDaysArrayForWeek(currentWeekLabel);
 
-      // Meta progressiva: PACE * dias decorridos até agora
-      const metaProgressiva = paceDiario * (index + 1);
+        // Buscar entry semanal pra pegar a meta
+        const weeklyEntry = allWeekEntries.find(e =>
+          (e.day === null || e.day === undefined) &&
+          e.kpiId === selectedDayKpi &&
+          e.week === currentWeekLabel &&
+          (filterSector === 'Todos' || e.sectorId === filterSector)
+        );
 
-      return {
-        label: String(day),
-        realizado: realized,
-        meta: paceDiario,
-        metaProgressiva: metaProgressiva,
-        isEstimated: realized === null
-      };
-    });
-  }, [viewMode, startWeek, selectedDayKpi, allWeekEntries, filterSector]);
+        const weeklyTarget = weeklyEntry?.target || 0;
+        const daysInWeek = days.length;
+        const paceDiario = weeklyTarget / daysInWeek;
+
+        days.forEach((day, index) => {
+          const dayEntries = allWeekEntries.filter(e =>
+            e.day === day &&
+            e.kpiId === selectedDayKpi &&
+            e.week === currentWeekLabel &&
+            (filterSector === 'Todos' || e.sectorId === filterSector)
+          );
+
+          const realized = dayEntries.length > 0 && dayEntries[0].realized !== null
+            ? Number(dayEntries[0].realized)
+            : null;
+
+          allData.push({
+            label: `${day}`,
+            realizado: realized,
+            meta: paceDiario,
+            isEstimated: realized === null,
+            week: currentWeekLabel
+          });
+        });
+      }
+
+      currentWeekIdx++;
+    }
+
+    return allData;
+  }, [viewMode, startWeek, endWeek, selectedDayKpi, allWeekEntries, filterSector]);
 
   // Dados de tendência por semana dentro do mês selecionado (modo mês)
   // Agrupa pelos valores reais de week nas entries ao invés de calcular semanas teóricas
@@ -717,6 +739,46 @@ export const Dashboard: React.FC = () => {
 
     return metrics;
   }, [filteredEntries, sectors, monthlyTargetMap, viewMode, selectedPeriodDaysByMonth]);
+
+  // ==========================================
+  // DADOS DE ACUMULADO POR KPI/SETOR PARA MINI-GRÁFICOS
+  // ==========================================
+  const kpiAccumulatedChartData = useMemo(() => {
+    const data: Record<string, Array<{ week: string; realizado: number; metaPace: number }>> = {};
+
+    entries.forEach(e => {
+      if (e.realized === null) return;
+
+      const key = `${e.sectorId}-${e.kpiId}`;
+      if (!data[key]) data[key] = [];
+
+      // Encontrar se já existe data pra essa semana
+      let weekData = data[key].find(d => d.week === e.week);
+      if (!weekData) {
+        weekData = { week: e.week, realizado: 0, metaPace: 0 };
+        data[key].push(weekData);
+      }
+
+      weekData.realizado += Number(e.realized);
+      weekData.metaPace += e.target ? (e.target / getDaysInWeek(e.week)) * getDaysInWeek(e.week) : 0;
+    });
+
+    // Converter para acumulado
+    Object.keys(data).forEach(key => {
+      const weeks = data[key].sort((a, b) => getWeekGlobalIndex(a.week) - getWeekGlobalIndex(b.week));
+      let accRealized = 0;
+      let accMetaPace = 0;
+
+      weeks.forEach(w => {
+        accRealized += w.realizado;
+        accMetaPace += w.metaPace;
+        w.realizado = accRealized;
+        w.metaPace = accMetaPace;
+      });
+    });
+
+    return data;
+  }, [entries]);
 
   // ==========================================
   // TODOS OS KPIs AGRUPADOS POR SETOR
@@ -1239,7 +1301,16 @@ export const Dashboard: React.FC = () => {
                         <Tooltip
                           contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '8px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
                           itemStyle={{ color: 'var(--tooltip-text, #fff)' }}
-                          formatter={(value: number | null) => value !== null ? value.toFixed(2) : 'Sem dados'}
+                          formatter={(value: number | null, name: string, props: any) => {
+                            if (name === 'realizado') {
+                              return [value !== null ? value.toFixed(2) : 'Sem dados', 'Realizado'];
+                            }
+                            return [value.toFixed(2), 'PACE Diário'];
+                          }}
+                          labelFormatter={(label: string, payload: any) => {
+                            const week = payload[0]?.payload?.week;
+                            return week ? `${label} (${week})` : label;
+                          }}
                         />
                         <ReferenceLine y={0} stroke="#52525b" />
                         {/* Linha de Meta Diária (PACE) */}
@@ -1494,12 +1565,10 @@ export const Dashboard: React.FC = () => {
 
                       {/* Rows */}
                       {sectorData.kpis.map((kpi, kpiIdx) => (
-                        <div
-                          key={kpi.kpiId}
-                          className={`grid grid-cols-12 gap-2 px-5 py-3 items-center text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/30 ${
-                            kpiIdx !== sectorData.kpis.length - 1 ? 'border-b border-zinc-100 dark:border-zinc-800' : ''
-                          }`}
-                        >
+                        <div key={kpi.kpiId}>
+                          <div
+                            className={`grid grid-cols-12 gap-2 px-5 py-3 items-center text-sm transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/30`}
+                          >
                           {/* Nome do KPI */}
                           <div className="col-span-3 flex items-center gap-2">
                             <span className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -1589,6 +1658,62 @@ export const Dashboard: React.FC = () => {
                               {kpi.fillRate}%
                             </span>
                           </div>
+                          </div>
+
+                        {/* Mini-gráfico de Acumulado */}
+                        {kpi.count > 0 && kpiAccumulatedChartData[`${sectorData.sectorId}-${kpi.kpiId}`] && (
+                          <div className="w-full py-3 px-5 bg-zinc-50 dark:bg-zinc-800/30 border-t border-zinc-100 dark:border-zinc-800">
+                            <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mb-2">Acumulado do Mês</p>
+                            <div style={{ width: '100%', height: '120px' }}>
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={kpiAccumulatedChartData[`${sectorData.sectorId}-${kpi.kpiId}`]} margin={{ top: 5, right: 15, left: -20, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                                  <XAxis
+                                    dataKey="week"
+                                    tick={{ fontSize: 10, fill: '#71717a' }}
+                                    tickFormatter={(week: string) => week.replace(/^[A-Z]{3}\s+/, '')}
+                                    axisLine={false}
+                                    tickLine={false}
+                                  />
+                                  <YAxis
+                                    yAxisId="left"
+                                    tick={{ fontSize: 10, fill: '#71717a' }}
+                                    axisLine={false}
+                                    tickLine={false}
+                                    width={40}
+                                  />
+                                  <Tooltip
+                                    contentStyle={{ backgroundColor: 'var(--tooltip-bg, #18181b)', borderRadius: '6px', border: '1px solid var(--tooltip-border, #3f3f46)', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}
+                                    itemStyle={{ color: 'var(--tooltip-text, #fff)', fontSize: '11px' }}
+                                    formatter={(value: number) => value.toFixed(2)}
+                                  />
+                                  <Line
+                                    yAxisId="left"
+                                    type="monotone"
+                                    dataKey="metaPace"
+                                    stroke="#94a3b8"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="4 4"
+                                    dot={false}
+                                    name="Meta (PACE)"
+                                    isAnimationActive={false}
+                                  />
+                                  <Line
+                                    yAxisId="left"
+                                    type="monotone"
+                                    dataKey="realizado"
+                                    stroke="#10b981"
+                                    strokeWidth={2}
+                                    dot={{ fill: '#10b981', r: 3 }}
+                                    activeDot={{ r: 4 }}
+                                    name="Realizado"
+                                    isAnimationActive={false}
+                                  />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          </div>
+                        )}
                         </div>
                       ))}
                     </div>
