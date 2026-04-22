@@ -55,6 +55,12 @@ const getCurrentWeekLabel = (): string => {
   return `${monthAbbr} Sem${weekNumber}`;
 };
 
+// Obter o dia de hoje em formato DD
+const getTodayLabel = (): string => {
+  const today = new Date();
+  return String(today.getDate()).padStart(2, '0');
+};
+
 // Tipo para metas mensais
 interface MonthlyTargetData {
   id: string;
@@ -754,39 +760,80 @@ export const Dashboard: React.FC = () => {
   }, [filteredEntries, sectors, monthlyTargetMap, viewMode, selectedPeriodDaysByMonth]);
 
   // ==========================================
-  // DADOS DE ACUMULADO POR KPI/SETOR PARA MINI-GRÁFICOS
+  // DADOS DE ACUMULADO POR KPI/SETOR PARA MINI-GRÁFICOS (POR DIA)
   // ==========================================
   const kpiAccumulatedChartData = useMemo(() => {
-    const data: Record<string, Array<{ week: string; realizado: number; metaPace: number }>> = {};
+    const data: Record<string, Array<{ day: string; realizado: number; metaPace: number; onTrack: boolean }>> = {};
+
+    // Primeiro, agrupar por setor-kpi-dia
+    const dayDataMap = new Map<string, { realizado: number; day: number; month: string; week: string; weekDays: number }>();
 
     entries.forEach(e => {
-      if (e.realized === null) return;
+      if (e.realized === null || e.day === null) return; // Só consideramos entries com dia específico
 
-      const key = `${e.sectorId}-${e.kpiId}`;
-      if (!data[key]) data[key] = [];
-
-      // Encontrar se já existe data pra essa semana
-      let weekData = data[key].find(d => d.week === e.week);
-      if (!weekData) {
-        weekData = { week: e.week, realizado: 0, metaPace: 0 };
-        data[key].push(weekData);
+      const key = `${e.sectorId}-${e.kpiId}-${e.day}`;
+      if (!dayDataMap.has(key)) {
+        dayDataMap.set(key, {
+          realizado: Number(e.realized),
+          day: e.day,
+          month: e.month,
+          week: e.week,
+          weekDays: getDaysInWeek(e.week)
+        });
+      } else {
+        const existing = dayDataMap.get(key)!;
+        existing.realizado += Number(e.realized);
       }
-
-      weekData.realizado += Number(e.realized);
-      weekData.metaPace += e.target ? (e.target / getDaysInWeek(e.week)) * getDaysInWeek(e.week) : 0;
     });
 
-    // Converter para acumulado
+    // Agrupar por setor-kpi e processar dias
+    const groupedByKpi = new Map<string, Map<number, { realizado: number; week: string; weekDays: number }>>();
+
+    dayDataMap.forEach(dayData => {
+      const kpiKey = `${dayData.month.substring(0, 3)}-${dayData.week}`.split(' ').join('-');
+      const parts = Array.from(dayDataMap.keys())
+        .filter(k => k.startsWith(kpiKey.split('-')[0]))
+        .map(k => k.split('-'));
+
+      // Simplificar: agrupar direto
+      entries.forEach(e => {
+        if (e.realized === null || e.day === null) return;
+        const kpiKey = `${e.sectorId}-${e.kpiId}`;
+
+        if (!data[kpiKey]) data[kpiKey] = [];
+
+        let existing = data[kpiKey].find(d => d.day === String(e.day).padStart(2, '0'));
+        if (!existing) {
+          existing = { day: String(e.day).padStart(2, '0'), realizado: 0, metaPace: 0, onTrack: false };
+          data[kpiKey].push(existing);
+        }
+
+        existing.realizado += Number(e.realized);
+        const weeklyEntry = entries.find(we =>
+          we.sectorId === e.sectorId &&
+          we.kpiId === e.kpiId &&
+          we.week === e.week &&
+          (we.day === null || we.day === undefined)
+        );
+        if (weeklyEntry?.target) {
+          const paceDia = weeklyEntry.target / getDaysInWeek(e.week);
+          existing.metaPace = paceDia;
+        }
+      });
+    });
+
+    // Converter para acumulado e calcular se bateu meta
     Object.keys(data).forEach(key => {
-      const weeks = data[key].sort((a, b) => getWeekGlobalIndex(a.week) - getWeekGlobalIndex(b.week));
+      const days = data[key].sort((a, b) => parseInt(a.day) - parseInt(b.day));
       let accRealized = 0;
       let accMetaPace = 0;
 
-      weeks.forEach(w => {
-        accRealized += w.realizado;
-        accMetaPace += w.metaPace;
-        w.realizado = accRealized;
-        w.metaPace = accMetaPace;
+      days.forEach(d => {
+        accRealized += d.realizado;
+        accMetaPace += d.metaPace;
+        d.realizado = accRealized;
+        d.metaPace = accMetaPace;
+        d.onTrack = accRealized >= accMetaPace;
       });
     });
 
@@ -1309,6 +1356,13 @@ export const Dashboard: React.FC = () => {
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={dayTrendDataByKpi} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                        <ReferenceLine
+                          x={getTodayLabel()}
+                          stroke="#f97316"
+                          strokeWidth={2}
+                          strokeDasharray="5 5"
+                          label={{ value: 'Hoje', position: 'top', fill: '#f97316', fontSize: 10 }}
+                        />
                         <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
                         <YAxis axisLine={false} tickLine={false} tick={{ fill: '#71717a', fontSize: 12 }} />
                         <Tooltip
@@ -1681,17 +1735,9 @@ export const Dashboard: React.FC = () => {
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={kpiAccumulatedChartData[`${sectorData.sectorId}-${kpi.kpiId}`]} margin={{ top: 5, right: 15, left: -20, bottom: 0 }}>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
-                                  <ReferenceLine
-                                    x={getCurrentWeekLabel()}
-                                    stroke="#f97316"
-                                    strokeWidth={2}
-                                    strokeDasharray="5 5"
-                                    label={{ value: 'Hoje', position: 'top', fill: '#f97316', fontSize: 10 }}
-                                  />
                                   <XAxis
-                                    dataKey="week"
+                                    dataKey="day"
                                     tick={{ fontSize: 10, fill: '#71717a' }}
-                                    tickFormatter={(week: string) => week.replace(/^[A-Z]{3}\s+/, '')}
                                     axisLine={false}
                                     tickLine={false}
                                   />
@@ -1724,6 +1770,34 @@ export const Dashboard: React.FC = () => {
                                     dataKey="realizado"
                                     stroke="#71717a"
                                     strokeWidth={2}
+                                    shape={(props: any) => {
+                                      const { points } = props;
+                                      if (!points || points.length === 0) return null;
+
+                                      return (
+                                        <g>
+                                          {points.map((point: any, idx: number) => {
+                                            if (idx === 0) return null;
+                                            const prev = points[idx - 1];
+                                            const payload = point.payload;
+                                            const isOnTrack = payload.realizado >= payload.metaPace;
+                                            const strokeColor = isOnTrack ? '#10b981' : '#ef4444';
+
+                                            return (
+                                              <line
+                                                key={`line-${idx}`}
+                                                x1={prev.x}
+                                                y1={prev.y}
+                                                x2={point.x}
+                                                y2={point.y}
+                                                stroke={strokeColor}
+                                                strokeWidth={2}
+                                              />
+                                            );
+                                          })}
+                                        </g>
+                                      );
+                                    }}
                                     dot={(props) => {
                                       const { cx, cy, payload } = props;
                                       const isOnTrack = payload.realizado >= payload.metaPace;
