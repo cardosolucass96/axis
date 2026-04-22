@@ -1702,9 +1702,16 @@ export const Dashboard: React.FC = () => {
                                     yAxisId="left"
                                     type="monotone"
                                     dataKey="realizado"
-                                    stroke="#10b981"
+                                    stroke="#71717a"
                                     strokeWidth={2}
-                                    dot={{ fill: '#10b981', r: 3 }}
+                                    dot={(props) => {
+                                      const { cx, cy, payload } = props;
+                                      const isOnTrack = payload.realizado >= payload.metaPace;
+                                      const fillColor = isOnTrack ? '#10b981' : '#ef4444';
+                                      return (
+                                        <circle cx={cx} cy={cy} r={3} fill={fillColor} />
+                                      );
+                                    }}
                                     activeDot={{ r: 4 }}
                                     name="Realizado"
                                     isAnimationActive={false}
