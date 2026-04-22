@@ -81,6 +81,7 @@ export const Dashboard: React.FC = () => {
   const [filterSector, setFilterSector] = useState<string>('Todos');
   const [entries, setEntries] = useState<KpiEntry[]>([]);
   const [allWeekEntries, setAllWeekEntries] = useState<KpiEntry[]>([]); // entradas da semana selecionada (modo dia)
+  const [allDailyEntries, setAllDailyEntries] = useState<KpiEntry[]>([]); // todas entradas diárias (para mini-gráficos acumulados)
   const [sectors, setSectors] = useState<Sector[]>([]);
   const [monthlyTargets, setMonthlyTargets] = useState<MonthlyTargetData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -162,6 +163,23 @@ export const Dashboard: React.FC = () => {
     };
 
     loadData();
+  }, [user]);
+
+  // Carregar todas as entradas diárias (para mini-gráficos acumulados)
+  useEffect(() => {
+    const loadDailyEntries = async () => {
+      try {
+        const all = await dataService.getEntries();
+        const userSectorIds = user?.sectorIds || [];
+        const filteredByRole = user?.role === 'leader' && userSectorIds.length > 0
+          ? all.filter((e: KpiEntry) => userSectorIds.includes(e.sectorId))
+          : all;
+        setAllDailyEntries(filteredByRole.filter((e: KpiEntry) => e.day !== null && e.day !== undefined));
+      } catch (err) {
+        console.error('Erro ao carregar daily entries:', err);
+      }
+    };
+    loadDailyEntries();
   }, [user]);
 
   // Carregar entradas diárias quando modo dia está ativo
@@ -763,82 +781,69 @@ export const Dashboard: React.FC = () => {
   // DADOS DE ACUMULADO POR KPI/SETOR PARA MINI-GRÁFICOS (POR DIA)
   // ==========================================
   const kpiAccumulatedChartData = useMemo(() => {
-    const data: Record<string, Array<{ day: string; realizado: number; metaPace: number; onTrack: boolean }>> = {};
+    const data: Record<string, Array<{ day: string; realizado: number; metaPace: number }>> = {};
 
-    // Primeiro, agrupar por setor-kpi-dia
-    const dayDataMap = new Map<string, { realizado: number; day: number; month: string; week: string; weekDays: number }>();
+    // 1. Determinar mês-alvo
+    const targetMonth = viewMode === 'month'
+      ? selectedMonth
+      : (startWeek ? startWeek.split(' ')[0] : null);
 
-    entries.forEach(e => {
-      if (e.realized === null || e.day === null) return; // Só consideramos entries com dia específico
+    if (!targetMonth) return data;
 
-      const key = `${e.sectorId}-${e.kpiId}-${e.day}`;
-      if (!dayDataMap.has(key)) {
-        dayDataMap.set(key, {
-          realizado: Number(e.realized),
-          day: e.day,
-          month: e.month,
-          week: e.week,
-          weekDays: getDaysInWeek(e.week)
-        });
-      } else {
-        const existing = dayDataMap.get(key)!;
-        existing.realizado += Number(e.realized);
-      }
+    // 2. Filtrar daily entries pelo mês-alvo e setor
+    const dailyFiltered = allDailyEntries.filter(e => {
+      const matchMonth = viewMode === 'month'
+        ? e.month === selectedMonth
+        : (e.week ? e.week.startsWith(targetMonth) : false);
+      const matchSector = filterSector === 'Todos' || e.sectorId === filterSector;
+      return matchMonth && matchSector && e.realized !== null;
     });
 
-    // Agrupar por setor-kpi e processar dias
-    const groupedByKpi = new Map<string, Map<number, { realizado: number; week: string; weekDays: number }>>();
+    // 3. Cache de metaPace por semana (weeklyTarget / daysInWeek)
+    const paceCache = new Map<string, number>();
+    const getPace = (sectorId: string, kpiId: string, week: string): number => {
+      const k = `${sectorId}|${kpiId}|${week}`;
+      if (paceCache.has(k)) return paceCache.get(k)!;
+      const weekly = entries.find(we =>
+        we.sectorId === sectorId && we.kpiId === kpiId &&
+        we.week === week && (we.day === null || we.day === undefined)
+      );
+      const pace = weekly?.target ? Number(weekly.target) / getDaysInWeek(week) : 0;
+      paceCache.set(k, pace);
+      return pace;
+    };
 
-    dayDataMap.forEach(dayData => {
-      const kpiKey = `${dayData.month.substring(0, 3)}-${dayData.week}`.split(' ').join('-');
-      const parts = Array.from(dayDataMap.keys())
-        .filter(k => k.startsWith(kpiKey.split('-')[0]))
-        .map(k => k.split('-'));
-
-      // Simplificar: agrupar direto
-      entries.forEach(e => {
-        if (e.realized === null || e.day === null) return;
-        const kpiKey = `${e.sectorId}-${e.kpiId}`;
-
-        if (!data[kpiKey]) data[kpiKey] = [];
-
-        let existing = data[kpiKey].find(d => d.day === String(e.day).padStart(2, '0'));
-        if (!existing) {
-          existing = { day: String(e.day).padStart(2, '0'), realizado: 0, metaPace: 0, onTrack: false };
-          data[kpiKey].push(existing);
-        }
-
-        existing.realizado += Number(e.realized);
-        const weeklyEntry = entries.find(we =>
-          we.sectorId === e.sectorId &&
-          we.kpiId === e.kpiId &&
-          we.week === e.week &&
-          (we.day === null || we.day === undefined)
-        );
-        if (weeklyEntry?.target) {
-          const paceDia = weeklyEntry.target / getDaysInWeek(e.week);
-          existing.metaPace = paceDia;
-        }
-      });
+    // 4. Agrupar por sectorId-kpiId-day
+    const perKpiDay = new Map<string, Map<number, { realizadoDia: number; paceDia: number }>>();
+    dailyFiltered.forEach(e => {
+      if (e.day === null || e.day === undefined) return;
+      const kpiKey = `${e.sectorId}-${e.kpiId}`;
+      if (!perKpiDay.has(kpiKey)) perKpiDay.set(kpiKey, new Map());
+      const dayMap = perKpiDay.get(kpiKey)!;
+      const existing = dayMap.get(e.day) || { realizadoDia: 0, paceDia: 0 };
+      existing.realizadoDia += Number(e.realized);
+      existing.paceDia = getPace(e.sectorId, e.kpiId, e.week);
+      dayMap.set(e.day, existing);
     });
 
-    // Converter para acumulado e calcular se bateu meta
-    Object.keys(data).forEach(key => {
-      const days = data[key].sort((a, b) => parseInt(a.day) - parseInt(b.day));
+    // 5. Acumular por dia (ordenado)
+    perKpiDay.forEach((dayMap, kpiKey) => {
+      const sortedDays = Array.from(dayMap.entries()).sort((a, b) => a[0] - b[0]);
       let accRealized = 0;
-      let accMetaPace = 0;
-
-      days.forEach(d => {
-        accRealized += d.realizado;
-        accMetaPace += d.metaPace;
-        d.realizado = accRealized;
-        d.metaPace = accMetaPace;
-        d.onTrack = accRealized >= accMetaPace;
+      let accPace = 0;
+      data[kpiKey] = sortedDays.map(([day, v]) => {
+        accRealized += v.realizadoDia;
+        accPace += v.paceDia;
+        return {
+          day: String(day).padStart(2, '0'),
+          realizado: accRealized,
+          metaPace: accPace,
+        };
       });
     });
 
     return data;
-  }, [entries]);
+  }, [allDailyEntries, entries, viewMode, selectedMonth, startWeek, filterSector]);
 
   // ==========================================
   // TODOS OS KPIs AGRUPADOS POR SETOR
@@ -1735,6 +1740,13 @@ export const Dashboard: React.FC = () => {
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={kpiAccumulatedChartData[`${sectorData.sectorId}-${kpi.kpiId}`]} margin={{ top: 5, right: 15, left: -20, bottom: 0 }}>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                                  <ReferenceLine
+                                    x={getTodayLabel()}
+                                    stroke="#f97316"
+                                    strokeWidth={1.5}
+                                    strokeDasharray="4 4"
+                                    label={{ value: 'Hoje', position: 'top', fill: '#f97316', fontSize: 9 }}
+                                  />
                                   <XAxis
                                     dataKey="day"
                                     tick={{ fontSize: 10, fill: '#71717a' }}
