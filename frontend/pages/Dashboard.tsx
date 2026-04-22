@@ -42,6 +42,19 @@ const isWeekInRange = (weekLabel: string, startWeek: string, endWeek: string): b
   return currentIdx >= minIdx && currentIdx <= maxIdx;
 };
 
+// Obter a semana atual no formato usado (ex: "FEV Sem2")
+const getCurrentWeekLabel = (): string => {
+  const today = new Date();
+  const monthIdx = today.getMonth();
+  const monthAbbr = MONTHS[monthIdx] || 'JAN';
+
+  // Calcular qual semana do mês
+  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+  const weekNumber = Math.floor((today.getDate() - firstDay.getDay()) / 7) + 1;
+
+  return `${monthAbbr} Sem${weekNumber}`;
+};
+
 // Tipo para metas mensais
 interface MonthlyTargetData {
   id: string;
@@ -1668,6 +1681,13 @@ export const Dashboard: React.FC = () => {
                               <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={kpiAccumulatedChartData[`${sectorData.sectorId}-${kpi.kpiId}`]} margin={{ top: 5, right: 15, left: -20, bottom: 0 }}>
                                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#27272a" />
+                                  <ReferenceLine
+                                    x={getCurrentWeekLabel()}
+                                    stroke="#f97316"
+                                    strokeWidth={2}
+                                    strokeDasharray="5 5"
+                                    label={{ value: 'Hoje', position: 'top', fill: '#f97316', fontSize: 10 }}
+                                  />
                                   <XAxis
                                     dataKey="week"
                                     tick={{ fontSize: 10, fill: '#71717a' }}
